@@ -4,8 +4,8 @@ Tabular-to-Image transformation methods.
 Usage:
     from src.t2i import T2ITransformer
     t = T2ITransformer(method='deepinsight', image_size=32)
-    t.fit(X_train)
-    images = t.transform(X_train)  # shape: (N, 1, 32, 32)
+    t.fit(X_train, y_train)
+    images = t.transform(X_train, y_train)  # shape: (N, 1, 32, 32)
 """
 
 from .naive import NaiveReshape
@@ -28,24 +28,32 @@ class T2ITransformer:
         self.transformer = self.METHODS[method](image_size=image_size, **kwargs)
         self.method = method
 
-    def fit(self, X_train):
-        self.transformer.fit(X_train)
+    def fit(self, X_train, y_train=None):
+        """Fit on training data. y_train needed for TINTOlib methods."""
+        self.transformer.fit(X_train, y_train)
         return self
 
-    def transform(self, X):
-        return self.transformer.transform(X)
+    def transform(self, X, y=None):
+        """Transform to images. y needed for TINTOlib methods.
+        Returns: torch.Tensor of shape (N, 1, H, W)"""
+        return self.transformer.transform(X, y)
 
 
 def verify_all_transformers():
-    """Verify all T2I transformers work with dummy data."""
-    import torch
+    """Verify all T2I transformers work with breast cancer dataset."""
     from src.preprocessing import preprocess_dataset
 
-    X_dummy = torch.randn(100, 30).numpy()  # 100 samples, 30 features
+    data = preprocess_dataset('breast_cancer')
+    X_train = data['X_train']
+    y_train = data['y_train']
 
     for method in ['naive', 'deepinsight', 'igtd']:
+        print(f"Testing {method}...")
         t = T2ITransformer(method=method, image_size=32)
-        t.fit(X_dummy)
-        images = t.transform(X_dummy)
-        assert images.shape == (100, 1, 32, 32), f"{method}: expected (100,1,32,32), got {images.shape}"
-        print(f"✓ {method}: {images.shape}")
+        t.fit(X_train, y_train)
+        images = t.transform(X_train, y_train)
+        print(f"  Shape: {images.shape}")
+        print(f"  Pixel range: [{images.min():.3f}, {images.max():.3f}]")
+        assert images.shape == (X_train.shape[0], 1, 32, 32), \
+            f"Expected ({X_train.shape[0]}, 1, 32, 32), got {images.shape}"
+        print(f"  PASS")
