@@ -62,9 +62,9 @@ class DeepInsight:
         shutil.rmtree(self._temp_dir, ignore_errors=True)
         self._temp_dir = None
 
-        # Normalize to [0, 1]
-        if images.max() > 0:
-            images = images / images.max()
+        # TINTOlib outputs [0, 1] via internal MinMaxScaler.
+        # Clamp to [0, 1] for out-of-distribution test samples.
+        images = np.clip(images, 0, 1)
 
         # Add channel dim: (N, 1, H, W)
         return torch.tensor(images).unsqueeze(1).float()

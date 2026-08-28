@@ -41,6 +41,20 @@ class IGTD:
             val_step=50,
         )
         self.model.fit(df)
+
+        # Compute normalization stats from training images
+        # IGTD outputs [0, 255], we need consistent [0, 1]
+        tmp = tempfile.mkdtemp()
+        self.model.transform(df, tmp)
+        cls = pd.read_csv(os.path.join(tmp, 'classification.csv'))
+        train_min, train_max = float('inf'), float('-inf')
+        for _, row in cls.iterrows():
+            arr = np.load(os.path.join(tmp, row['images']))
+            train_min = min(train_min, arr.min())
+            train_max = max(train_max, arr.max())
+        self._train_min = train_min
+        self._train_max = train_max
+        shutil.rmtree(tmp, ignore_errors=True)
         return self
 
     def transform(self, X, y=None):
@@ -67,9 +81,13 @@ class IGTD:
         shutil.rmtree(self._temp_dir, ignore_errors=True)
         self._temp_dir = None
 
-        # Normalize to [0, 1]
-        if images.max() > 0:
-            images = images / images.max()
+        # IGTD outputs [0, 255]. Normalize to [0, 1] using training stats.
+        rng = self._train_max - self._train_min
+        if rng > 0:
+            images = (images - self._train_min) / rng
+
+        # Clamp to [0, 1] for consistency
+        images = np.clip(images, 0, 1)
 
         # Add channel dim: (N, 1, H, W)
         return torch.tensor(images).unsqueeze(1).float()
