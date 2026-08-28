@@ -59,7 +59,9 @@ class NaiveReshape:
                 img = Image.fromarray(images[i])
                 img = img.resize((self.image_size, self.image_size), Image.BICUBIC)
                 resized[i] = np.array(img, dtype=np.float32)
-            images = resized
+            # Clip immediately after bicubic to prevent ringing overshoot
+            # (bicubic can produce values outside input range on sharp transitions)
+            images = np.clip(resized, images.min(), images.max())
 
         # Normalize using training statistics (no data leakage).
         # FIX (Bug #1): Previously used images.max() per-call, which gave

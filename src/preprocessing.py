@@ -297,7 +297,7 @@ def download_datasets():
     if not dry_bean_csv.exists():
         _download_dry_bean(dry_bean_csv)
     else:
-        print("[dry_bain] Already downloaded")
+        print("[dry_bean] Already downloaded")
 
     # Adult Income
     adult_dir = DATA_DIR / "adult_income"

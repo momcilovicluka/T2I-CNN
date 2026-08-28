@@ -10,23 +10,50 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
 import numpy as np
+import random
 import json
 import time
 from pathlib import Path
 
 
-def compute_class_weights(y):
-    """Compute inverse-frequency class weights for imbalanced datasets.
-    
-    Returns: torch.Tensor of shape (num_classes,) to use with CrossEntropyLoss.
+def set_global_seed(seed=42):
+    """Set all random seeds for reproducibility.
+
+    WHY: Even with TINTOlib's random_seed=42, numpy and torch global
+    generators can produce different results across runs. This function
+    ensures deterministic behavior for full reproducibility.
     """
-    classes, counts = np.unique(y, return_counts=True)
-    total = len(y)
-    weights = total / (len(classes) * counts)
-    # Convert to tensor indexed by class
-    weight_tensor = torch.zeros(classes.max() + 1, dtype=torch.float32)
-    for c, w in zip(classes, weights):
-        weight_tensor[c] = w
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+
+def compute_class_weights(y):
+    """Compute balanced class weights for imbalanced datasets.
+
+    Uses sklearn's compute_class_weight which handles:
+    - Non-contiguous labels (e.g., [0, 2, 5])
+    - Correct inverse-frequency weighting
+    - Works with any number of classes
+
+    Returns: torch.Tensor indexed by class label for CrossEntropyLoss.
+    """
+    from sklearn.utils.class_weight import compute_class_weight
+
+    unique_classes = np.unique(y)
+    weights = compute_class_weight(
+        class_weight='balanced',
+        classes=unique_classes,
+        y=y
+    )
+    # Map weights into tensor indexed by class label
+    weight_tensor = torch.ones(unique_classes.max() + 1, dtype=torch.float32)
+    for cls, w in zip(unique_classes, weights):
+        weight_tensor[cls] = w
     return weight_tensor
 
 
@@ -156,11 +183,22 @@ def load_checkpoint(model, path):
 
 
 def prepare_loaders(X_train, y_train, X_val, y_val, batch_size=32):
-    """Convert numpy arrays to DataLoaders."""
-    # Add channel dim: (N, C, H, W) — C=1 for grayscale
-    X_train_t = torch.tensor(X_train).unsqueeze(1).float()
+    """Convert numpy arrays or tensors to DataLoaders.
+
+    Handles both raw feature arrays (N, features) and pre-generated
+    images (N, 1, H, W) from T2I methods. Adds channel dim only if needed.
+    """
+    # Convert to tensors and add channel dim if missing
+    X_train_t = torch.tensor(X_train).float()
+    if X_train_t.ndim == 3:  # (N, H, W) — add channel
+        X_train_t = X_train_t.unsqueeze(1)
+    # else: already (N, 1, H, W) or (N, C, H, W)
+
     y_train_t = torch.tensor(y_train).long()
-    X_val_t = torch.tensor(X_val).unsqueeze(1).float()
+
+    X_val_t = torch.tensor(X_val).float()
+    if X_val_t.ndim == 3:
+        X_val_t = X_val_t.unsqueeze(1)
     y_val_t = torch.tensor(y_val).long()
 
     train_ds = TensorDataset(X_train_t, y_train_t)
@@ -209,3 +247,26 @@ def zscore_normalize(X_train, X_val=None, X_test=None):
     X_test_n = (X_test - mean) / std if X_test is not None else None
     
     return X_train_n, X_val_n, X_test_n
+
+
+# ImageNet normalization constants for pretrained models (ResNet, ViT)
+IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+
+
+def imagenet_normalize(images):
+    """Apply ImageNet normalization to images for pretrained models.
+
+    WHY (Concern 4): Pretrained ResNet-18 and ViT were trained on ImageNet
+    with specific mean/std normalization. Feeding [0,1] images directly
+    causes distribution mismatch, hurting transfer learning by up to
+    +21.65% accuracy loss (per literature).
+
+    Input: (N, 1, H, W) grayscale tensor
+    Output: (N, 3, H, W) normalized tensor
+    """
+    # Convert grayscale to RGB by repeating channel
+    images_rgb = images.repeat(1, 3, 1, 1)  # (N, 3, H, W)
+    # Apply ImageNet normalization
+    images_norm = (images_rgb - IMAGENET_MEAN.to(images.device)) / IMAGENET_STD.to(images.device)
+    return images_norm
