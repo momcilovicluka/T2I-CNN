@@ -58,13 +58,16 @@ def train_model(model, train_loader, val_loader, config):
 
     model = model.to(device)
 
-    # Loss function with optional class weights
+    # Loss function with optional class weights + label smoothing
     class_weights = config.get('class_weights', None)
+    label_smoothing = config.get('label_smoothing', 0.1)
     if class_weights is not None:
         class_weights = class_weights.to(device)
-        criterion = nn.CrossEntropyLoss(weight=class_weights)
+        criterion = nn.CrossEntropyLoss(
+            weight=class_weights, label_smoothing=label_smoothing
+        )
     else:
-        criterion = nn.CrossEntropyLoss()
+        criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
 
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
@@ -160,3 +163,37 @@ def prepare_loaders(X_train, y_train, X_val, y_val, batch_size=32):
     val_loader = DataLoader(val_ds, batch_size=batch_size, shuffle=False)
 
     return train_loader, val_loader
+
+# === Additional improvements from literature review ===
+
+def zscore_normalize(X_train, X_val=None, X_test=None):
+    """Z-score standardization (channel-wise for images).
+    
+    beneficial for CNNs, especially pretrained models (ResNet, ViT).
+    Subtract mean, divide by std — computed on training data only.
+    
+    Args:
+        X_train: np.ndarray (N, C, H, W) or (N, H, W)
+        X_val: optional validation data
+        X_test: optional test data
+    
+    Returns:
+        Normalized arrays (same shape as input)
+    """
+    # Compute per-channel mean and std from training data
+    if X_train.ndim == 4:
+        # (N, C, H, W) — compute per channel
+        mean = X_train.mean(axis=(0, 2, 3), keepdims=True)
+        std = X_train.std(axis=(0, 2, 3), keepdims=True)
+    else:
+        # (N, H, W) — compute global
+        mean = X_train.mean()
+        std = X_train.std()
+    
+    std = np.where(std == 0, 1, std)  # avoid division by zero
+    
+    X_train_n = (X_train - mean) / std
+    X_val_n = (X_val - mean) / std if X_val is not None else None
+    X_test_n = (X_test - mean) / std if X_test is not None else None
+    
+    return X_train_n, X_val_n, X_test_n

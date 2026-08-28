@@ -32,6 +32,15 @@ def _load_tinto_images(temp_dir, N, y):
         subfolder = str(label).zfill(2)
         filename = str(i).zfill(6) + '.npy'
         img_path = os.path.join(temp_dir, subfolder, filename)
+
+        # Alignment assertion: verify file exists
+        if not os.path.exists(img_path):
+            raise FileNotFoundError(
+                f"TINTOlib image not found: {img_path}"
+                f"\n  sample={i}, label={label}, temp_dir={temp_dir}"
+                f"\n  Available files: {os.listdir(os.path.join(temp_dir, subfolder)) if os.path.isdir(os.path.join(temp_dir, subfolder)) else 'subfolder missing'}"
+            )
+
         arr = np.load(img_path)
         images.append(arr)
     return np.stack(images)

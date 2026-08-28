@@ -41,12 +41,13 @@ class NaiveReshape:
         # Reshape to square grid (N, grid, grid)
         images = padded.reshape(N, self.grid_size, self.grid_size)
 
-        # Resize to target image_size using nearest neighbor
+        # Resize to target image_size using bicubic interpolation
+        # (smoother gradients than nearest-neighbor, preserves edges better)
         if self.grid_size != self.image_size:
             resized = np.zeros((N, self.image_size, self.image_size), dtype=np.float32)
             for i in range(N):
                 img = Image.fromarray(images[i])
-                img = img.resize((self.image_size, self.image_size), Image.NEAREST)
+                img = img.resize((self.image_size, self.image_size), Image.BICUBIC)
                 resized[i] = np.array(img, dtype=np.float32)
             images = resized
 
