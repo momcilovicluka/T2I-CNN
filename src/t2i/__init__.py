@@ -8,9 +8,33 @@ Usage:
     images = t.transform(X_train, y_train)  # shape: (N, 1, 32, 32)
 """
 
+import numpy as np
+import os
+
 from .naive import NaiveReshape
 from .deepinsight import DeepInsight
 from .igtd import IGTD
+
+
+def _load_tinto_images(temp_dir, N, y):
+    """Load images from TINTOlib output directory by sample index.
+
+    TINTOlib stores images as: {class_subfolder}/{zero_padded_index}.npy
+    where class_subfolder = str(int(label)).zfill(2)
+    and index = original row position in the input DataFrame.
+
+    This function loads by constructing the filename from the sample index,
+    ensuring correct order even when input data is shuffled.
+    """
+    images = []
+    for i in range(N):
+        label = int(y[i]) if y is not None else 0
+        subfolder = str(label).zfill(2)
+        filename = str(i).zfill(6) + '.npy'
+        img_path = os.path.join(temp_dir, subfolder, filename)
+        arr = np.load(img_path)
+        images.append(arr)
+    return np.stack(images)
 
 
 class T2ITransformer:
