@@ -38,7 +38,18 @@ class DeepInsight:
         return self
 
     def transform(self, X, y=None):
-        """Transform feature vectors to image tensors of shape (N, 1, H, W)."""
+        """Transform feature vectors to image tensors of shape (N, 1, H, W).
+
+        FIX (Bug #2): Removed redundant images/images.max() normalization.
+        TINTOlib already outputs [0, 1] via internal MinMaxScaler. The
+        extra normalization distorted spatial mapping and created inconsistent
+        scales across splits (val max=0.90, test max=1.25 for breast cancer).
+
+        FIX (Bug #4): Now uses _load_tinto_images() which loads by sample
+        index instead of CSV row order. TINTOlib's classification.csv lists
+        files in sequential filename order, not input DataFrame order.
+        Shuffled input would previously assign wrong images to wrong samples.
+        """
         from . import _load_tinto_images
 
         N = X.shape[0]
@@ -58,8 +69,9 @@ class DeepInsight:
         shutil.rmtree(self._temp_dir, ignore_errors=True)
         self._temp_dir = None
 
-        # TINTOlib outputs [0, 1] via internal MinMaxScaler.
-        # Clamp for out-of-distribution test samples.
+        # Clamp to [0, 1] for out-of-distribution test samples.
+        # WHY: TINTOlib's MinMaxScaler is fit on training data, so test
+        # values can exceed [0, 1]. Clipping ensures consistent range.
         images = np.clip(images, 0, 1)
 
         # Add channel dim: (N, 1, H, W)

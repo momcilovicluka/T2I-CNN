@@ -540,3 +540,179 @@ python src/ablation.py  # Ablation experiments
 # Checkpoint 8
 python src/visualize.py  # Generate all figures
 """
+
+---
+
+# WORKFLOW UPDATE: Changes Made & Remaining Work
+
+## Date: August 28, 2026
+
+## Changes Made (Checkpoints 1-3 Complete)
+
+### Checkpoint 0: Environment Setup ✓
+- Git initialized, project structure created
+- requirements.txt, .gitignore, run_all.py
+- Commit: 328bfbf
+
+### Checkpoint 1: Dataset Acquisition ✓
+- Breast Cancer (sklearn), Dry Bean (UCI), Adult Income (UCI)
+- preprocessing.py: load, encode, stratified split, StandardScaler
+- EDA notebook with 10 profiling figures
+- Commits: 151d35b, b2e64a8
+
+### Checkpoint 2: Preprocessing Pipeline ✓
+- Unified preprocess_dataset() returns dict with all splits
+- Verified: all 3 datasets load correctly
+- Part of commit: 151d35b
+
+### Checkpoint 3: T2I Methods ✓
+- naive.py: custom pad+reshape+bicubic resize
+- deepinsight.py: TINTOlib wrapper (t-SNE manifold)
+- igtd.py: TINTOlib wrapper (rank-based permutation)
+- __init__.py: T2ITransformer unified interface + _load_tinto_images helper
+- Commit: 079a363
+
+### Checkpoint 3: Code Review & Bug Fixes ✓
+5 bugs fixed, 5 structural concerns addressed:
+
+| # | Issue | Fix | Commit |
+|---|-------|-----|--------|
+| 1 | Naive normalization data leakage | Train min/max in fit() | a760bbf |
+| 2 | DeepInsight/IGTD redundant normalization | Removed, added clip | a760bbf |
+| 3 | IGTD output range [0,255] mismatch | Divide by 255.0 | a760bbf |
+| 4 | CSV order bug | Index-based loading | bf6e158 |
+| 5 | IGTD redundant fit transform | Removed | bf6e158 |
+| 6 | Naive 97%+ zeros | Documented as limitation | — |
+| 7 | Class imbalance | Class weights + macro-F1 | 79e79c9 |
+| 8 | 32x32 too small for 108 feat | PLANNED for CP4 | — |
+| 9 | ResNet/ViT need 224x224 | PLANNED for CP4 | — |
+| 10 | Small data overfitting | Weight decay + early stop + label smoothing | 79e79c9, 8b556ad |
+
+### Literature-Based Improvements ✓
+- Bicubic interpolation (concern 9): naive.py uses Image.BICUBIC
+- Label smoothing (concern 10): CrossEntropyLoss(label_smoothing=0.1)
+- Z-score normalization (concern 3): zscore_normalize() utility
+- Alignment assertion (concern 4): FileNotFoundError in _load_tinto_images
+- Commit: 8b556ad
+
+---
+
+## Remaining Work: Checkpoint 4 (CNN Models)
+
+### Must Implement
+
+1. **ShallowCNN** (src/models/shallow_cnn.py)
+   - 3-layer CNN from scratch
+   - Input: (1, 32, 32) grayscale
+   - Architecture: Conv(1→32)→BN→ReLU→Pool → Conv(32→64)→BN→ReLU→Pool → Conv(64→128)→BN→ReLU→Pool → FC(128*4*4→256)→Dropout→FC(256→C)
+   - Dropout(0.5) for regularization
+
+2. **ResNetWrapper** (src/models/resnet_wrapper.py)
+   - Load pretrained torchvision.models.resnet18
+   - ADAPT INPUT: resize 32→224 with bicubic, repeat 1ch→3ch
+   - Replace first conv: Conv2d(1, 64, 7) OR use repeat approach
+   - Replace final FC: Linear(512, num_classes)
+   - Freeze early layers, fine-tune later layers
+   - Two learning rate groups: backbone (1e-4), head (1e-3)
+
+3. **ViTWrapper** (src/models/vit_wrapper.py)
+   - Use timm.create_model('vit_base_patch16_224', pretrained=True)
+   - Same input adaptation as ResNet
+   - Replace head: num_classes output
+   - Same freeze/fine-tune strategy
+
+### Must Handle
+
+4. **Adaptive image sizing** (Concern 8)
+   - Adult Income: 108 features → use 64x64 or 128x128 instead of 32x32
+   - Or: use feature selection (Relief/mRMR) to reduce to ~50 features
+   - Decision needed before running experiments
+
+5. **Data augmentation** (Concern 10)
+   - For small datasets (breast cancer: 398 samples)
+   - Random horizontal/vertical flip
+   - Random rotation (±15°)
+   - Random noise (Gaussian, σ=0.01)
+   - Apply AFTER T2I transformation (augment images, not features)
+
+6. **run_all.py integration**
+   - Connect preprocessing → T2I → CNN → evaluate pipeline
+   - Save results to JSON with all metrics
+   - Handle class weights computation per dataset
+
+### Should Implement
+
+7. **Gradient-weighted class activation mapping (Grad-CAM)**
+   - Visualize which pixels CNN attends to
+   - Compare across T2I methods
+   - Shows if CNN learns meaningful spatial patterns
+
+8. **Training curves logging**
+   - Save loss/accuracy per epoch for plotting
+   - matplotlib figures for paper
+
+### Nice to Have
+
+9. **Feature selection before T2I** (Concern 8)
+   - Run mRMR/Relief to select top-K features
+   - Reduces sparsity for high-dimensional datasets
+   - Would help Adult Income significantly
+
+10. **ArcFace/CosFace margin loss** (Concern 10)
+    - Alternative to cross-entropy for small datasets
+    - Projects features onto unit hypersphere
+    - May improve breast cancer results
+
+---
+
+## Experiment Matrix (Final)
+
+| Dataset | T2I Method | CNN | Notes |
+|---------|-----------|-----|-------|
+| Breast Cancer | naive | shallow | 398 train, 30 features |
+| Breast Cancer | naive | resnet | Transfer learning |
+| Breast Cancer | naive | vit | Transfer learning |
+| Breast Cancer | deepinsight | shallow | t-SNE mapping |
+| Breast Cancer | deepinsight | resnet | Transfer learning |
+| Breast Cancer | deepinsight | vit | Transfer learning |
+| Breast Cancer | igtd | shallow | Rank-based mapping |
+| Breast Cancer | igtd | resnet | Transfer learning |
+| Breast Cancer | igtd | vit | Transfer learning |
+| Dry Bean | naive | shallow | 9527 train, 16 features |
+| Dry Bean | naive | resnet | Transfer learning |
+| Dry Bean | naive | vit | Transfer learning |
+| Dry Bean | deepinsight | shallow | t-SNE mapping |
+| Dry Bean | deepinsight | resnet | Transfer learning |
+| Dry Bean | deepinsight | vit | Transfer learning |
+| Dry Bean | igtd | shallow | Rank-based mapping |
+| Dry Bean | igtd | resnet | Transfer learning |
+| Dry Bean | igtd | vit | Transfer learning |
+| Adult Income | naive | shallow | 34188 train, 108 features |
+| Adult Income | naive | resnet | Transfer learning |
+| Adult Income | naive | vit | Transfer learning |
+| Adult Income | deepinsight | shallow | t-SNE mapping |
+| Adult Income | deepinsight | resnet | Transfer learning |
+| Adult Income | deepinsight | vit | Transfer learning |
+| Adult Income | igtd | shallow | Rank-based mapping |
+| Adult Income | igtd | resnet | Transfer learning |
+| Adult Income | igtd | vit | Transfer learning |
+
+Total: 27 CNN experiments + 9 baselines (RF, XGBoost, MLP) = 36 experiments
+
+---
+
+## Key Design Decisions (Documented)
+
+1. **Why bicubic over nearest**: Produces smoother gradients, preserves edges better when upscaling sparse matrices. Nearest creates blocky artifacts. (Literature: Concern 9)
+
+2. **Why label smoothing (0.1)**: Reduces overconfident predictions, improves generalization on small datasets. Especially important for breast cancer (398 samples). (Literature: Concern 10)
+
+3. **Why class weights**: Inverse-frequency weighting prevents majority-class bias. Dry Bean 6.6:1 imbalance would otherwise inflate accuracy. (Concern 7)
+
+4. **Why macro-F1 over accuracy**: Accuracy is misleading with class imbalance. Macro-F1 gives equal weight to all classes. (Concern 7)
+
+5. **Why index-based loading**: TINTOlib CSV order doesn't match input order when data is shuffled. Loading by filename index ensures correct sample-to-image mapping. (Bug #4)
+
+6. **Why /255.0 for IGTD**: IGTD outputs [0,255] via matplotlib colormap, DeepInsight outputs [0,1] via MinMaxScaler. Explicit /255.0 makes normalization deterministic rather than dependent on batch max. (Bug #3)
+
+7. **Why clamp(0,1)**: Out-of-distribution test samples can have values outside training range. Clipping ensures consistent pixel range across all methods and splits. (Bug #2)

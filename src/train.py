@@ -58,7 +58,14 @@ def train_model(model, train_loader, val_loader, config):
 
     model = model.to(device)
 
-    # Loss function with optional class weights + label smoothing
+    # Loss function with:
+    # - Class weights (Concern 7): Inverse-frequency weighting prevents
+    #   majority-class bias. Dry Bean has 6.6:1 imbalance, Adult Income
+    #   3.2:1. Without weights, CNN defaults to predicting majority class.
+    # - Label smoothing (Concern 10): smoothing=0.1 transforms one-hot
+    #   labels to soft distributions, reducing overconfident predictions.
+    #   Especially important for small datasets (breast cancer: 398 samples)
+    #   where deep models tend to memorize.
     class_weights = config.get('class_weights', None)
     label_smoothing = config.get('label_smoothing', 0.1)
     if class_weights is not None:
@@ -168,10 +175,15 @@ def prepare_loaders(X_train, y_train, X_val, y_val, batch_size=32):
 
 def zscore_normalize(X_train, X_val=None, X_test=None):
     """Z-score standardization (channel-wise for images).
-    
-    beneficial for CNNs, especially pretrained models (ResNet, ViT).
-    Subtract mean, divide by std — computed on training data only.
-    
+
+    WHY (Concern 3): Literature shows CNNs, especially pretrained models
+    (ResNet-18, ViT), benefit from Z-score normalization. Subtracting
+    channel-wise mean and dividing by std aligns input distribution with
+    what ImageNet-pretrained models expect. Can improve transfer learning
+    performance by up to +21.65% (per reviewer citations).
+
+    Computed on training data only — no data leakage.
+
     Args:
         X_train: np.ndarray (N, C, H, W) or (N, H, W)
         X_val: optional validation data

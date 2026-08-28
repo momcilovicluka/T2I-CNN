@@ -13,8 +13,11 @@ import tempfile
 import shutil
 
 
-# IGTD internally outputs images in [0, 255] range.
-# We normalize to [0, 1] by dividing by 255.
+# IGTD internally outputs images in [0, 255] range (matplotlib colormap).
+# DeepInsight outputs [0, 1] (MinMaxScaler on features).
+# FIX (Bug #3): These ranges were mismatched — both used images.max()
+# which happened to work for IGTD (~255/255=1) but was fragile.
+# Now IGTD explicitly divides by 255.0 for deterministic normalization.
 IGTD_RAW_MAX = 255.0
 
 
@@ -45,11 +48,20 @@ class IGTD:
             val_step=50,
         )
         self.model.fit(df)
-        # No need to run transform here — IGTD output range is known [0, 255]
+        # FIX (Bug #5): Previously ran self.model.transform() here just to
+        # compute min/max for normalization. This doubled IGTD fit time.
+        # Now we use the known output range [0, 255] directly.
         return self
 
     def transform(self, X, y=None):
-        """Transform feature vectors to image tensors of shape (N, 1, H, W)."""
+        """Transform feature vectors to image tensors of shape (N, 1, H, W).
+
+        FIX (Bug #3): IGTD outputs [0, 255] (matplotlib colormap), while
+        DeepInsight outputs [0, 1] (MinMaxScaler). Normalizes by /255.0
+        to match DeepInsight's range.
+
+        FIX (Bug #4): Uses _load_tinto_images() for index-based loading.
+        """
         from . import _load_tinto_images
 
         N = X.shape[0]
@@ -69,10 +81,11 @@ class IGTD:
         shutil.rmtree(self._temp_dir, ignore_errors=True)
         self._temp_dir = None
 
-        # IGTD outputs [0, 255]. Normalize to [0, 1].
+        # IGTD outputs [0, 255]. Normalize to [0, 1] for consistency
+        # with DeepInsight which outputs [0, 1] via MinMaxScaler.
         images = images / IGTD_RAW_MAX
 
-        # Clamp for consistency
+        # Clamp for out-of-distribution test samples
         images = np.clip(images, 0, 1)
 
         # Add channel dim: (N, 1, H, W)
