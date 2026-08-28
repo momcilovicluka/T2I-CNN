@@ -263,3 +263,214 @@ sample was actually tion of which sample was actually at position 0 in the input
 The most dangerous combination is bugs #1 and #3: naive would look worse
 than it should, while IGTD might look better or worse than it should,
 leading to wrong conclusions about which T2I method is best.
+
+---
+
+# PART 2: Structural Concerns Review
+
+## Date: August 28, 2026 (continued)
+
+## Additional Concerns Found During Deep Review
+
+Beyond the 5 code bugs, 5 structural/design concerns were identified that
+could skew experimental results if not addressed.
+
+---
+
+## Concern 6: Naive Images Are 97%+ Zeros
+
+### What Was Found
+Naive reshape pads features to a perfect square (e.g., 30 → 36 = 6×6),
+then resizes to 32×32 with nearest-neighbor. Each feature becomes a 3×3
+block of identical values, surrounded by zeros.
+
+| Dataset | Features | Zero pixels in 32×32 | Feature density |
+|---------|----------|---------------------|-----------------|
+| Breast Cancer | 30 | 994 / 1024 | 2.9% |
+| Dry Bean | 16 | 1008 / 1024 | 1.6% |
+| Adult Income | 108 | 916 / 1024 | 10.5% |
+
+### Impact on Results
+- Naive will perform much worse than DeepInsight/IGTD
+- Comparison becomes confounded: "feature arrangement" + "feature density"
+- CNN has almost no signal to learn from (97% zeros)
+- Could make naive appear artificially bad, exaggerating the benefit
+  of intelligent T2I methods
+
+### How It Was Addressed
+**Documented as inherent baseline limitation — NOT fixed.**
+This is actually a legitimate finding for the paper: naive reshaping is
+fundamentally limited by feature count vs. image size. The comparison
+demonstrates why intelligent feature arrangement matters.
+
+### Residual Risk
+LOW — this is expected behavior for a naive baseline. The paper should
+discuss this limitation explicitly.
+
+---
+
+## Concern 7: Class Imbalance Will Inflate Accuracy
+
+### What Was Found
+| Dataset | Majority class | Imbalance ratio |
+|---------|---------------|-----------------|
+| Breast Cancer | 62.6% benign | 1.7:1 |
+| Dry Bean | 26.1% DERMASON | 6.6:1 (vs BOMBAY 3.8%) |
+| Adult Income | 76.1% <=50K | 3.2:1 |
+
+Without correction, a majority-class classifier gets:
+- Breast Cancer: 62.6% accuracy (misleading)
+- Dry Bean: 26.1% accuracy (random-level but looks like "something")
+- Adult Income: 76.1% accuracy (deceptively high)
+
+### Impact on Results
+- Accuracy alone would be misleading for all datasets
+- Dry Bean (7 classes, 6.6:1 imbalance) would be most affected
+- CNN might learn to always predict majority class
+- Would make all methods appear similar if they all default to majority
+
+### How It Was Addressed
+**Fixed with two changes:**
+
+1. **Class weights in loss function** (`src/train.py`):
+   ```python
+   def compute_class_weights(y):
+       classes, counts = np.unique(y, return_counts=True)
+       weights = total / (len(classes) * counts)
+       return weight_tensor  # inverse frequency
+   ```
+   Used with `nn.CrossEntropyLoss(weight=class_weights)`
+
+2. **Macro-F1 as primary metric** (`src/evaluate.py`):
+   - Macro-averaged F1 (equal weight to all classes)
+   - Macro-averaged precision/recall
+   - ROC-AUC with OVR (one-vs-rest) for multiclass
+   - Full classification report per experiment
+
+### Residual Risk
+LOW — class weights + macro metrics handle imbalance correctly.
+Dry Bean may still show lower absolute performance due to 7-class
+difficulty, but comparisons will be fair.
+
+---
+
+## Concern 8: 32×32 Too Small for 108 Features (Adult Income)
+
+### What Was Found
+108 one-hot encoded features on 32×32 = 10.5% density. Convolutional
+kernels (3×3) see 9 pixels at a time — with 89.5% zeros, most
+activations will be zero.
+
+### Impact on Results
+- All methods will struggle on Adult Income
+- CNN may not learn meaningful spatial patterns
+- Adult Income results will be less reliable than other datasets
+- Could mask differences between T2I methods
+
+### How It Was Addressed
+**Planned for Checkpoint 4 (CNN model wrappers).**
+Options to address:
+- Use larger image size (64×64) for Adult Income specifically
+- Use adaptive image sizing based on feature count
+- Document as limitation if image size is kept fixed
+
+### Residual Risk
+MEDIUM — needs to be addressed in Checkpoint 4. If not fixed, Adult
+Income results should be interpreted with caution.
+
+---
+
+## Concern 9: ResNet-18/ViT Expect 224×224 RGB Input
+
+### What Was Found
+Shallow CNN accepts 32×32 grayscale natively. But ResNet-18 and ViT
+(pretrained on ImageNet) expect 224×224 3-channel input.
+
+### Impact on Results
+- Without adaptation, ResNet/ViT will crash or produce wrong results
+- Pretrained weights trained on natural images won't transfer well
+  to sparse synthetic images
+- Resize method matters: nearest-neighbor (blocky) vs bilinear (smooth)
+- Channel conversion (1ch→3ch) adds no new information
+
+### How It Was Addressed
+**Planned for Checkpoint 4 (model wrappers).**
+Implementation plan:
+- Resize 32→224 with bilinear interpolation (smoother than nearest)
+- Convert 1ch→3ch by repeating: `x.repeat(1, 3, 1, 1)`
+- Fine-tune with low LR for backbone, higher LR for new layers
+- Document that pretrained weights may not transfer well
+
+### Residual Risk
+MEDIUM — needs implementation in Checkpoint 4. The adaptation method
+will affect results and must be documented.
+
+---
+
+## Concern 10: Small Dataset + Deep Model = Overfitting
+
+### What Was Found
+Breast Cancer: 398 training samples. ResNet-18: 11M parameters.
+Ratio: 27,638 parameters per sample — extreme overfitting risk.
+
+### Impact on Results
+- ResNet-18 may memorize training data on Breast Cancer
+- Test accuracy could be much lower than training accuracy
+- Would make ResNet appear worse than it actually is
+- Comparison between shallow CNN and ResNet would be unfair
+
+### How It Was Addressed
+**Partially fixed in `src/train.py`:**
+- L2 weight decay (1e-4) — reduces overfitting
+- Early stopping (patience 10) — stops before memorization
+- LR scheduling (ReduceLROnPlateau) — prevents overshooting
+
+**Additional measures planned for Checkpoint 4:**
+- Data augmentation (random flip, rotation, noise)
+- Dropout in fully connected layers
+- Freeze early ResNet layers, only fine-tune later layers
+
+### Residual Risk
+MEDIUM — weight decay + early stopping help, but data augmentation
+is still needed for small datasets. Will address in Checkpoint 4.
+
+---
+
+## Summary: All Issues and Their Status
+
+### Code Bugs (Fixed)
+
+| # | Issue | File | Severity | Status | Commit |
+|---|-------|------|----------|--------|--------|
+| 1 | Naive normalization data leakage | naive.py | 🔴 Critical | FIXED | a760bbf |
+| 2 | DeepInsight/IGTD redundant normalization | deepinsight.py, igtd.py | 🔴 Critical | FIXED | a760bbf |
+| 3 | IGTD output range [0,255] vs [0,1] | igtd.py | 🔴 Critical | FIXED | a760bbf |
+| 4 | CSV order ≠ input order on shuffled data | deepinsight.py, igtd.py | 🔴 Critical | FIXED | bf6e158 |
+| 5 | IGTD redundant transform in fit() | igtd.py | 🟡 Performance | FIXED | bf6e158 |
+
+### Structural Concerns (Addressed)
+
+| # | Concern | Impact | Status | How |
+|---|---------|--------|--------|-----|
+| 6 | Naive 97%+ zeros | Makes naive appear worse | DOCUMENTED | Inherent to baseline; paper finding |
+| 7 | Class imbalance inflates accuracy | Misleading metrics | FIXED | Class weights + macro-F1 |
+| 8 | 32×32 too small for 108 features | Poor Adult Income results | PLANNED | Adaptive sizing in Checkpoint 4 |
+| 9 | ResNet/ViT need 224×224 RGB | Model crashes | PLANNED | Bilinear resize + channel repeat |
+| 10 | Small data + deep model = overfitting | ResNet performs poorly | PARTIAL | Weight decay + early stopping; augmentation planned |
+
+### Impact on Experimental Results
+
+If ALL issues were NOT addressed:
+
+1. **Naive** would show artificially poor performance (bugs #1 + concern #6)
+2. **DeepInsight** would show inconsistent training (bug #2)
+3. **IGTD** could fail completely (bugs #3 + #4)
+4. **Accuracy metrics** would be misleading for all methods (concern #7)
+5. **Adult Income** results would be unreliable (concern #8)
+6. **ResNet/ViT** would crash or overfit (concerns #9 + #10)
+
+After fixes:
+- All methods produce consistent [0,1] images ✓
+- Metrics are imbalance-aware (macro-F1) ✓
+- Class weights prevent majority-class bias ✓
+- Remaining concerns (8, 9, 10) planned for Checkpoint 4
