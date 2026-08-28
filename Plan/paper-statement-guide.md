@@ -1,0 +1,245 @@
+# Paper Statement Guide
+
+## What Must Be Stated in the Seminar Paper
+
+Each section below contains: what to write, why it must be stated,
+and what code/decision it references.
+
+---
+
+## 1. Limitations Section (Required)
+
+### 1.1 Single Split Without Cross-Validation
+**Write:** "Experiments used a single stratified train/val/test split
+(80/10/10) with fixed random seed. Results were not validated with
+k-fold cross-validation or multiple random splits."
+
+**Why:** A single split could produce results that are specific to
+that particular partition. Without variance estimates, we cannot
+determine if differences between methods are statistically significant.
+
+**References:**
+- `src/preprocessing.py` line 163: `random_state=42` in train_test_split
+- `Plan/professor-validation.md` Section 4: "No Variance Reporting"
+
+### 1.2 Naive Baseline Confounded
+**Write:** "The naive reshape baseline produces images where 97%+ of
+pixels are zero-padded (breast cancer: 2.9% density, dry bean: 1.6%,
+adult income: 10.5%). This confounds feature arrangement quality with
+feature density. Naive results should be interpreted as demonstrating
+the minimum performance without intelligent spatial mapping, not as a
+direct comparison of arrangement algorithms."
+
+**Why:** Naive performance reflects both poor arrangement AND sparse
+images. DeepInsight/IGTD also produce sparse images but arrange
+features based on similarity. The improvement over naive comes from
+both factors.
+
+**References:**
+- `src/t2i/naive.py` lines 18-19: grid_size = ceil(sqrt(n_features))
+- Feature density analysis: breast cancer 30 features in 1024 pixels = 2.9%
+
+### 1.3 Fixed Hyperparameters
+**Write:** "All experiments used identical hyperparameters (learning
+rate=1e-3, epochs=50, early stopping patience=10, weight decay=1e-4,
+label smoothing=0.1) regardless of T2I method or CNN architecture.
+This ensures fair comparison but may disadvantage architectures that
+require different tuning (e.g., ResNet-18 typically needs lower
+learning rates for backbone layers)."
+
+**Why:** Different methods may converge at different rates. A learning
+rate optimal for shallow CNN may be too high for ResNet-18, causing
+instability. Fixed hyperparameters prevent method-specific tuning
+but also prevent each method from reaching its best performance.
+
+**References:**
+- `src/train.py` lines 92-95: config defaults
+- `Plan/professor-validation.md` Section 2: "No Hyperparameter Tuning"
+
+### 1.4 Architecture Capacity Mismatch
+**Write:** "CNN architectures vary substantially in capacity:
+shallow CNN (~200K parameters), ResNet-18 (~11M parameters, 55x more),
+ViT-base (~86M parameters, 430x more). Results reflect the interaction
+between T2I method and model capacity, not T2I method alone."
+
+**Why:** A more powerful model may extract useful patterns from even
+poor image representations. If ResNet outperforms shallow CNN on all
+T2I methods, the difference may be due to capacity, not the T2I method.
+
+**References:**
+- `src/models/shallow_cnn.py`: 3 conv layers + 2 FC layers
+- `src/models/resnet_wrapper.py`: torchvision pretrained ResNet-18
+- `src/models/vit_wrapper.py`: timm pretrained ViT-base
+
+### 1.5 Transfer Learning Limitations
+**Write:** "Pretrained models (ResNet-18, ViT) were trained on ImageNet
+natural images. Our synthetic images are grayscale-based, sparse, and
+structurally different from natural images. Transfer learning performance
+may not reflect the true potential of these architectures on tabular
+data, as the pretrained feature extractors were not designed for this
+domain."
+
+**Why:** ResNet's early layers detect edges, textures, and colors in
+natural images. Our images have none of these features. The pretrained
+weights may actually hurt performance by forcing the model to detect
+irrelevant patterns.
+
+**References:**
+- `src/train.py` lines 203-220: `imagenet_normalize()` applies ImageNet
+  mean/std, confirming pretrained models are used
+- `src/models/resnet_wrapper.py`: `pretrained=True`
+
+### 1.6 ViT Patch Resolution
+**Write:** "ViT-base with patch_size=16 on 32×32 images produces only
+4 patches (2×2). The attention mechanism requires sufficient spatial
+resolution to learn meaningful relationships between patches. ViT
+results on 32×32 images should be interpreted with caution."
+
+**Why:** ViT splits the image into non-overlapping patches and applies
+self-attention across them. With only 4 patches, there are very few
+attention pairs, limiting the model's ability to learn spatial
+relationships. This is a fundamental limitation of the input resolution.
+
+**References:**
+- `src/models/vit_wrapper.py`: `timm.create_model('vit_base_patch16_224')`
+- Input is resized to 224×224 for ViT, but original features are from
+  32×32 — the resize adds interpolation artifacts
+
+---
+
+## 2. Methodology Section (Required)
+
+### 2.1 Preprocessing
+**Write:** "All datasets were preprocessed with stratified train/val/test
+splits (80/10/10) and StandardScaler normalization (fit on training data
+only). For Adult Income, the official UCI train/test split was combined
+and re-split to ensure stratification."
+
+**Why:** Must document the exact preprocessing to ensure reproducibility.
+StandardScaler on train only prevents data leakage.
+
+**References:**
+- `src/preprocessing.py` lines 155-173: `preprocess()` function
+- `src/preprocessing.py` lines 198-213: Adult Income re-split
+
+### 2.2 T2I Methods
+**Write:** "Three tabular-to-image methods were implemented:
+(1) Naive Reshape — pad features to next perfect square, resize to
+32×32 with bicubic interpolation, normalize to [0,1] using training
+min/max; (2) DeepInsight — TINTOlib implementation using t-SNE for
+feature-to-pixel coordinate mapping; (3) IGTD — TINTOlib implementation
+using rank-based permutation to match feature and pixel distance
+rankings. All methods produce 32×32 single-channel grayscale images
+normalized to [0,1]."
+
+**Why:** Must describe each method precisely so results are reproducible.
+
+**References:**
+- `src/t2i/naive.py`: bicubic resize, train min/max normalization
+- `src/t2i/deepinsight.py`: TINTOlib DeepInsight wrapper
+- `src/t2i/igtd.py`: TINTOlib IGTD wrapper, /255.0 normalization
+
+### 2.3 Class Imbalance Handling
+**Write:** "Class imbalance was handled with inverse-frequency class
+weights in the cross-entropy loss (sklearn compute_class_weight
+with 'balanced' mode). Primary evaluation metric was macro-F1, which
+gives equal weight to all classes regardless of frequency."
+
+**Why:** Dry Bean has 6.6:1 imbalance, Adult Income 3.2:1. Without
+class weights, models default to majority class. Macro-F1 prevents
+inflated accuracy metrics.
+
+**References:**
+- `src/train.py` lines 47-62: `compute_class_weights()` using sklearn
+- `src/evaluate.py` line 67: `f1_score(y_true, y_pred, average='macro')`
+
+### 2.4 Training Configuration
+**Write:** "All models were trained with Adam optimizer (lr=1e-3,
+weight_decay=1e-4), early stopping (patience=10 on validation loss),
+learning rate scheduling (ReduceLROnPlateau, factor=0.5, patience=5),
+and label smoothing (0.1). Maximum 50 epochs. All experiments used
+fixed random seed (42) for reproducibility."
+
+**Why:** Must document exact training setup for reproducibility.
+
+**References:**
+- `src/train.py` lines 92-95: config defaults
+- `src/train.py` lines 100-108: optimizer and scheduler
+- `src/train.py` lines 28-39: `set_global_seed(42)`
+
+---
+
+## 3. Results Section (Required)
+
+### 3.1 Report These Metrics
+**Write:** "For each experiment, we report accuracy, macro-precision,
+macro-recall, macro-F1, ROC-AUC (macro OVR for multiclass), and
+PR-AUC. Confusion matrices are provided in the appendix."
+
+**Why:** Multiple metrics give a complete picture. Accuracy alone is
+misleading with class imbalance.
+
+**References:**
+- `src/evaluate.py` lines 65-93: `_compute_metrics()` returns all metrics
+
+### 3.2 Interpret Results Carefully
+**Write when presenting results:** "DeepInsight and IGTD outperform
+naive on all datasets, demonstrating that intelligent feature
+arrangement improves CNN classification of tabular data converted to
+images. However, naive performance is confounded with feature density
+(97%+ zeros), so agnitude of improvement reflects both arrangement
+quality and image sparsity."
+
+**Why:** Prevents overclaiming. The improvement is real but the cause
+is multifactorial.
+
+---
+
+## 4. Design Decisions (State in Methodology)
+
+### 4.1 Why Bicubic Over Nearest-Neighbor
+**Write:** "Naive resize used bicubic interpolation rather than
+nearest-neighbor. Bicubic computes weighted averages over 4x4 pixel
+gradients, producing smoother transitions between feature pixels and
+zero-padded regions."
+
+**References:**
+- src/t2i/naive.py lines 38-47: bicubic with comment explaining WHY
+
+### 4.2 Why ImageNet Normalization for Pretrained Models
+**Write:** "Pretrained ResNet-18 and ViT inputs were normalized using
+ImageNet statistics (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224,
+0.225]) after converting grayscale to RGB by channel repetition."
+
+**References:**
+- src/train.py lines 203-220: imagenet_normalize() and constants
+
+### 4.3 Why Class Weights With sklearn
+**Write:** "Class weights were computed using sklearn compute_class_weight
+with balanced mode, which handles non-contiguous labels."
+
+**References:**
+- src/train.py lines 47-62: compute_class_weights()
+
+---
+
+## 5. Future Work (Required)
+
+- Cross-validation with confidence intervals
+- Adaptive image sizing based on feature count
+- Feature selection (mRMR, Relief) before T2I
+- Data augmentation for small datasets
+- ArcFace/CosFace margin loss
+
+---
+
+## 6. Reproducibility Statement (Required)
+
+**Write:** "All experiments used fixed random seed (42) for numpy,
+PyTorch, and CUDA. TINTOlib internal random seed was also set to 42.
+TINTOlib results may vary slightly across hardware."
+
+**References:**
+- src/train.py lines 28-39: set_global_seed(42)
+- src/t2i/deepinsight.py line 27: random_seed=42
+- src/t2i/igtd.py line 33: random_seed=42
