@@ -243,3 +243,59 @@ TINTOlib results may vary slightly across hardware."
 - src/train.py lines 28-39: set_global_seed(42)
 - src/t2i/deepinsight.py line 27: random_seed=42
 - src/t2i/igtd.py line 33: random_seed=42
+
+## PART 7: NEW METHODOLOGY IMPLEMENTED
+
+### 7a. Dynamic Image Sizing (Concern 8)
+
+**What was done:** Added `compute_optimal_image_size()` to `src/t2i/__init__.py`.
+Chooses the smallest square image where feature density >= 20%.
+
+**Results:**
+- 16 features (Dry Bean) → 8x8 (25% density)
+- 30 features (Breast Cancer) → 8x8 (47% density)
+- 108 features (Adult Income) → 16x16 (42% density)
+
+**Paper statement:** "Image dimensions were chosen to ensure at least 20% feature
+density, preventing excessive sparsity that would render convolutional operations
+ineffective. This adaptive sizing approach follows the VFP principle of matching
+image dimensions to feature count."
+
+### 7b. ResNet-18 From-Scratch Option (Concern 4)
+
+**What was done:** Implemented `ResNetWrapper` in `src/models/resnet_wrapper.py`
+with `pretrained=True` and `pretrained=False` options.
+
+**Paper statement:** "ResNet-18 was evaluated both with ImageNet pretrained weights
+and from random initialization. The from-scratch variant controls for architecture
+capacity, isolating the effect of transfer learning from the T2I method quality."
+
+### 7c. LP-FT Training Strategy (Concern 5)
+
+**What was done:** Added `train_lp_ft()` to `src/train.py`. Two-phase training:
+1. Freeze backbone, train only FC head (Linear Probing)
+2. Unfreeze all layers, train end-to-end with lower LR (Fine-Tuning)
+
+**Paper statement:** "For pretrained models (ResNet-18, ViT), a Linear Probing then
+Fine-Tuning (LP-FT) strategy was employed. Phase 1 stabilizes the classification
+head without corrupting pretrained features. Phase 2 gradually adapts the full
+network to the synthetic image distribution."
+
+### 7d. ViT Wrapper with 224x224 Resize (Concern 6)
+
+**What was done:** Implemented `ViTWrapper` in `src/models/vit_wrapper.py` using
+timm's ViT-Base/patch16/224. Automatically resizes input to 224x224 with bilinear
+interpolation. Uses LP-FT for transfer learning.
+
+**Paper statement:** "ViT-Base (patch_size=16) was used with input images resized
+from 32x32 to 224x224 via bilinear interpolation to produce 196 patches, providing
+sufficient spatial tokens for self-attention mechanisms."
+
+### 7e. Cross-Validation (Concern 1)
+
+**What was done:** Added `cross_validate()` to `src/train.py` using stratified
+5-fold CV with mean +/- std reporting.
+
+**Paper statement:** "All experiments were evaluated using stratified 5-fold
+cross-validation. Results are reported as mean +/- standard deviation to quantify
+variance and ensure statistical significance of observed differences."

@@ -716,3 +716,40 @@ Total: 27 CNN experiments + 9 baselines (RF, XGBoost, MLP) = 36 experiments
 6. **Why /255.0 for IGTD**: IGTD outputs [0,255] via matplotlib colormap, DeepInsight outputs [0,1] via MinMaxScaler. Explicit /255.0 makes normalization deterministic rather than dependent on batch max. (Bug #3)
 
 7. **Why clamp(0,1)**: Out-of-distribution test samples can have values outside training range. Clipping ensures consistent pixel range across all methods and splits. (Bug #2)
+
+## CHECKPOINT 3.5: Model Architecture Implementation (COMPLETED)
+
+### What was implemented
+
+| File | What | Why |
+|------|------|-----|
+| `src/models/shallow_cnn.py` | 3-layer CNN, ~620K params | Fair baseline — no pretrained features |
+| `src/models/resnet_wrapper.py` | ResNet-18, ~11M params | Standard image classifier; supports pretrained=True/False |
+| `src/models/vit_wrapper.py` | ViT-Base/patch16, ~86M params | Self-attention alternative to CNN; auto-resizes to 224x224 |
+| `src/train.py` | `train_lp_ft()` | Two-phase LP-FT for pretrained models |
+| `src/t2i/__init__.py` | `compute_optimal_image_size()` | Adaptive sizing: min 20% feature density |
+
+### Design decisions (with literature citations)
+
+1. **ShallowCNN uses AdaptiveAvgPool2d(4)** — handles any input size
+   (8x8, 16x16, 32x32) without modifying architecture
+2. **ResNet from-scratch option** — controls for capacity vs. T2I quality
+3. **LP-FT for pretrained models** — prevents destroying pretrained features
+   on synthetic images (58%+ improvement in specialized tasks)
+4. **ViT auto-resize to 224x224** — bilinear interpolation; produces 196 patches
+5. **Dynamic image sizing targets 20% density** — ensures CNN kernels have
+   meaningful activations, not just zeros
+
+### Parameter counts
+
+| Model | Parameters | Image Size |
+|-------|-----------|------------|
+| ShallowCNN | 619,463 | 8x8 to 32x32 |
+| ResNet-18 | 11,173,831 | 32x32 (native) or 224x224 |
+| ViT-Base | ~86M | 224x224 (always) |
+
+### Remaining work
+
+- Checkpoint 4: Run all experiments (27 CNN configs + 9 baselines)
+- Checkpoint 5: Generate comparison tables and figures
+- Checkpoint 6: Write the paper
