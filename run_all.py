@@ -22,8 +22,6 @@ from pathlib import Path
 import numpy as np
 import torch
 
-# Ensure project root is on path
-sys.path.insert(0, str(Path(__file__).parent))
 
 
 DATASETS = ['breast_cancer', 'dry_bean', 'adult_income']
@@ -38,6 +36,65 @@ DATASET_CONFIG = {
     'adult_income': {'num_classes': 2, 'image_size': 32},
 }
 
+
+class ProgressTracker:
+    """Track experiment progress with ETA and resume support."""
+
+    def __init__(self, total, label="experiments"):
+        self.total = total
+        self.completed = 0
+        self.failed = 0
+        self.label = label
+        self.start_time = time.time()
+        self.times = []
+
+    def start_experiment(self, idx, name):
+        self.current_name = name
+        self.current_start = time.time()
+        elapsed = time.time() - self.start_time
+        sep = "=" * 60
+        print(f"\n{sep}")
+        print(f"[{idx}/{self.total}] {name}")
+        print(f"  Elapsed: {self._fmt_time(elapsed)}", end="")
+
+    def end_experiment(self, success=True, f1=None):
+        elapsed_exp = time.time() - self.current_start
+        self.times.append(elapsed_exp)
+
+        if success:
+            self.completed += 1
+            avg_time = sum(self.times) / len(self.times)
+            remaining = (self.total - self.completed - self.failed) * avg_time
+            eta = datetime.now() + timedelta(seconds=remaining)
+            f1_str = f" | F1={f1:.4f}" if f1 else ""
+            eta_str = eta.strftime("%H:%M")
+            print(f"{f1_str} | Done in {elapsed_exp:.0f}s | ETA: {self._fmt_time(remaining)} ({eta_str})")
+        else:
+            self.failed += 1
+            print(f" | FAILED after {elapsed_exp:.0f}s")
+
+        pct = self.completed / self.total * 100 if self.total > 0 else 0
+        print(f"  Progress: {self.completed}/{self.total} done, {self.failed} failed ({pct:.0f}%)")
+
+    def summary(self):
+        elapsed = time.time() - self.start_time
+        sep = "=" * 60
+        print(f"\n{sep}")
+        print(f"SUMMARY: {self.completed}/{self.total} completed, {self.failed} failed")
+        print(f"Total time: {self._fmt_time(elapsed)}")
+        if self.times:
+            print(f"Avg per experiment: {sum(self.times)/len(self.times):.0f}s")
+
+    def _fmt_time(self, seconds):
+        if seconds < 60:
+            return f"{seconds:.0f}s"
+        if seconds < 3600:
+            m = int(seconds // 60)
+            s = int(seconds % 60)
+            return f"{m}m {s}s"
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        return f"{h}h {m}m"
 
 def create_cnn_model(arch, num_classes):
     """Initialize a CNN model by architecture name."""
