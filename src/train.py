@@ -106,7 +106,7 @@ def train_model(model, train_loader, val_loader, config):
     # Optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, mode='min', factor=0.5, patience=5, verbose=False
+        optimizer, mode='min', factor=0.5, patience=5
     )
 
     history = {'train_loss': [], 'val_loss': [], 'val_acc': []}
