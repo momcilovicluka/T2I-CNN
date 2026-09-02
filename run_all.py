@@ -317,7 +317,7 @@ def aggregate_results(output_dir='results'):
     # Select key columns for the summary CSV
     key_cols = ['dataset', 't2i_method', 'cnn_arch', 'accuracy', 'f1_macro',
                 'precision_macro', 'recall_macro', 'roc_auc', 'pr_auc',
-                'train_time_sec', 'train_samples', 'test_samples']
+                'train_time_sec', 'epochs_trained', 'train_samples', 'test_samples']
     key_cols = [c for c in key_cols if c in df.columns]
 
     csv_path = results_dir / 'all_experiments.csv'
