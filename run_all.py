@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 DATASETS = ['breast_cancer', 'dry_bean', 'adult_income']
-T2I_METHODS = ['naive', 'deepinsight', 'igtd']
+T2I_METHODS = ['naive', 'tinto', 'deepinsight', 'igtd', 's_igtd']
 CNN_ARCHITECTURES = ['shallow', 'resnet', 'vit']
 BASELINE_MODELS = ['rf', 'xgboost', 'mlp']
 

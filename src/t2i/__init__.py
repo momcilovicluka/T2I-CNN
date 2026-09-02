@@ -12,8 +12,10 @@ import numpy as np
 import os
 
 from .naive import NaiveReshape
+from .tinto import TINTO
 from .deepinsight import DeepInsight
 from .igtd import IGTD
+from .s_igtd import SIGTD
 
 
 def _load_tinto_images(temp_dir, N, y):
@@ -85,8 +87,10 @@ class T2ITransformer:
 
     METHODS = {
         'naive': NaiveReshape,
+        'tinto': TINTO,
         'deepinsight': DeepInsight,
         'igtd': IGTD,
+        's_igtd': SIGTD,
     }
 
     def __init__(self, method='naive', image_size=32, auto_size=False, **kwargs):
@@ -141,7 +145,7 @@ def verify_all_transformers():
     X_train = data['X_train']
     y_train = data['y_train']
 
-    for method in ['naive', 'deepinsight', 'igtd']:
+    for method in ['naive', 'tinto', 'deepinsight', 'igtd', 's_igtd']:
         print(f"Testing {method}...")
         t = T2ITransformer(method=method, image_size=32)
         t.fit(X_train, y_train)
