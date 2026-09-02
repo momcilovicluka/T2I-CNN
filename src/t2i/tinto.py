@@ -28,6 +28,7 @@ class TINTO:
         self.image_size = image_size
         self.model = None
         self._temp_dir = None
+        self._coordinates = None  # pixel coordinate map after fit()
 
     def fit(self, X_train, y_train=None):
         """Learn feature-to-pixel coordinate mapping from training data."""
@@ -55,6 +56,13 @@ class TINTO:
             random_seed=42,
         )
         self.model.fit(df)
+        # Store pixel coordinate map for overlap diagnostics
+        # TINTO uses _features_mapping (DataFrame with feature, row, column)
+        if hasattr(self.model, '_features_mapping'):
+            mapping = self.model._features_mapping
+            self._coordinates = mapping[['row', 'column']].values
+        elif hasattr(self.model, '_features_positions'):
+            self._coordinates = self.model._features_positions.copy()
         return self
 
     def transform(self, X, y=None):
@@ -88,3 +96,11 @@ class TINTO:
 
         # Add channel dim: (N, 1, H, W)
         return torch.tensor(images).unsqueeze(1).float()
+
+    def get_coordinates(self):
+        """Return feature-to-pixel coordinate mapping.
+
+        Returns: np.ndarray of shape (n_features, 2) with (x, y) pixel
+        coordinates, or None if not fitted.
+        """
+        return self._coordinates

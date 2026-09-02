@@ -18,6 +18,7 @@ class DeepInsight:
         self.image_size = image_size
         self.model = None
         self._temp_dir = None
+        self._coordinates = None  # pixel coordinate map after fit()
 
     def fit(self, X_train, y_train=None):
         """Learn feature-to-pixel coordinate mapping from training data."""
@@ -35,6 +36,10 @@ class DeepInsight:
             format='npy',
         )
         self.model.fit(df)
+        # Store pixel coordinate map for overlap diagnostics
+        # WHY (Step 3): OF/OP metrics need the feature->pixel mapping
+        if hasattr(self.model, '_features_positions'):
+            self._coordinates = self.model._features_positions.copy()
         return self
 
     def transform(self, X, y=None):
@@ -76,3 +81,14 @@ class DeepInsight:
 
         # Add channel dim: (N, 1, H, W)
         return torch.tensor(images).unsqueeze(1).float()
+
+    def get_coordinates(self):
+        """Return feature-to-pixel coordinate mapping.
+
+        WHY (Step 3): Enables overlap diagnostics (OF/OP) without
+        re-running the T2I transformation.
+
+        Returns: np.ndarray of shape (n_features, 2) with (x, y) pixel
+        coordinates, or None if not fitted.
+        """
+        return self._coordinates

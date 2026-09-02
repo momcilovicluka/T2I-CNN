@@ -33,6 +33,7 @@ class SIGTD:
         self.model = None
         self._temp_dir = None
         self._class_means = None
+        self._coordinates = None
 
     def _compute_class_means(self, X, y):
         """Compute per-class mean for each feature.
@@ -111,6 +112,13 @@ class SIGTD:
             # Store for potential use in custom distance re-optimization
             self._supervised_dist = supervised_dist
 
+        # Store pixel coordinate map for overlap diagnostics
+        if hasattr(self.model, '_features_mapping'):
+            mapping = self.model._features_mapping
+            self._coordinates = mapping[['row', 'column']].values
+        elif hasattr(self.model, '_features_positions'):
+            self._coordinates = self.model._features_positions.copy()
+
         return self
 
     def transform(self, X, y=None):
@@ -147,3 +155,10 @@ class SIGTD:
 
         # Add channel dim: (N, 1, H, W)
         return torch.tensor(images).unsqueeze(1).float()
+
+    def get_coordinates(self):
+        """Return feature-to-pixel coordinate mapping.
+
+        S-IGTD is collision-free by design (IGTD-based).
+        """
+        return self._coordinates

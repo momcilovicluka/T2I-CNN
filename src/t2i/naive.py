@@ -16,6 +16,10 @@ class NaiveReshape:
         self.grid_size = None
         self.padded_size = None
 
+    def get_coordinates(self):
+        """Naive has no coordinate mapping — deterministic pad+reshape."""
+        return None
+
     def fit(self, X_train, y_train=None):
         """Compute grid size and normalization stats from training data.
 

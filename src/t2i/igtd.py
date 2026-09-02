@@ -26,6 +26,7 @@ class IGTD:
         self.image_size = image_size
         self.model = None
         self._temp_dir = None
+        self._coordinates = None
 
     def fit(self, X_train, y_train=None):
         """Learn feature-to-pixel coordinate mapping from training data."""
@@ -51,6 +52,12 @@ class IGTD:
         # FIX (Bug #5): Previously ran self.model.transform() here just to
         # compute min/max for normalization. This doubled IGTD fit time.
         # Now we use the known output range [0, 255] directly.
+        # Store pixel coordinate map for overlap diagnostics
+        if hasattr(self.model, '_features_mapping'):
+            mapping = self.model._features_mapping
+            self._coordinates = mapping[['row', 'column']].values
+        elif hasattr(self.model, '_features_positions'):
+            self._coordinates = self.model._features_positions.copy()
         return self
 
     def transform(self, X, y=None):
@@ -90,3 +97,11 @@ class IGTD:
 
         # Add channel dim: (N, 1, H, W)
         return torch.tensor(images).unsqueeze(1).float()
+
+    def get_coordinates(self):
+        """Return feature-to-pixel coordinate mapping.
+
+        IGTD is collision-free by design, so OF/OP will always be 0.
+        Coordinates are useful for visualizing the layout.
+        """
+        return self._coordinates
