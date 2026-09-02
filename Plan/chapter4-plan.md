@@ -38,7 +38,9 @@
 - Describe each method's algorithm (1 paragraph each)
 - Naive: pad to next perfect square, reshape to grid, bicubic upscale to 32×32
 - DeepInsight: compute feature-feature correlation matrix, t-SNE to 2D, assign pixel coordinates, fill with normalized values
+- TINTO: similar to DeepInsight but adds artistic blurring filter to smooth spatial patterns, reducing sharp transitions between adjacent features
 - IGTD: rank feature-feature distances, rank pixel-pixel distances, minimize Frobenius norm via iterative swapping
+- S-IGTD (Supervised IGTD): uses class labels to compute between-group feature distances, placing class-discriminative features in local neighborhoods. Literature shows 5-8% improvement over unsupervised IGTD on multi-class problems
 - Explain adaptive image sizing: minimum 20% feature density (Section 3.2)
 - State: "All methods produce single-channel grayscale images normalized to [0,1]"
 
@@ -93,6 +95,27 @@
 - Purpose: establish upper bound for what's achievable without image transformation
 - If CNN + T2I outperforms baselines → the transformation adds value
 - If baselines outperform CNN → transformation may be lossy
+
+
+### 4.1.7 Image Quality Diagnostics (Overlap Metrics)
+
+**Text to write:**
+- For DeepInsight and TINTO (which can have coordinate collisions), compute:
+  - OF = (Overlapped Features / Total Features) x 100
+  - OP = (Overlapped Pixels / Active Pixels) x 100
+- IGTD and S-IGTD are collision-free by design (OF=0, OP=0)
+- Higher overlap means lossy compression of feature values
+- These metrics quantify image quality before the CNN sees them
+
+**Table 2b: Feature Overlap Diagnostics**
+
+| Dataset | DeepInsight OF/OP | TINTO OF/OP | IGTD | S-IGTD |
+|---------|-------------------|-------------|------|--------|
+| Breast Cancer | xmm/xmm% | xmm/xmm% | 0/0 | 0/0 |
+| Dry Bean | xmm/xmm% | xmm/xmm% | 0/0 | 0/0 |
+| Adult Income | xmm/xmm% | xmm/xmm% | 0/0 | 0/0 |
+
+**Code reference:** Compute from coordinate maps in T2I fit step
 
 ### 4.1.6 Evaluation Protocol
 
@@ -277,7 +300,7 @@ This is the **most important table** in the paper. Structure:
 ## What Must Be Implemented Before Writing
 
 ### Must Have
-1. `run_all.py` - trains all 27 CNN + 9 baseline configs
+1. `run_all.py` - trains all 60 CNN (5 T2I x 3 datasets x 4 archs) + 9 baseline configs
 2. `src/baselines/*.py` - implement RF, XGBoost, MLP (currently stubs)
 3. `src/ablation.py` - pixel shuffling, feature ordering (currently stubs)
 
@@ -298,4 +321,4 @@ This is the **most important table** in the paper. Structure:
 | Adult Income CNN | 12 | ~4h | ~24h |
 | Baselines | 9 | ~5min | ~15min |
 | Ablation | 6 | ~20min | ~2h |
-| **Total** | **~51** | **~7h** | **~40h** |
+| **Total** | **~75** | **~10h** | **~59h** |

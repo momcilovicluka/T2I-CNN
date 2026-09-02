@@ -697,7 +697,7 @@ python src/visualize.py  # Generate all figures
 | Adult Income | igtd | resnet | Transfer learning |
 | Adult Income | igtd | vit | Transfer learning |
 
-Total: 27 CNN experiments + 9 baselines (RF, XGBoost, MLP) = 36 experiments
+Total: 60 CNN experiments (5 T2I x 3 datasets x 4 architectures) + 9 baselines (RF, XGBoost, MLP) = 69 experiments
 
 ---
 
@@ -750,6 +750,9 @@ Total: 27 CNN experiments + 9 baselines (RF, XGBoost, MLP) = 36 experiments
 
 ### Remaining work
 
-- Checkpoint 4: Run all experiments (27 CNN configs + 9 baselines)
+- Implement TINTO wrapper (src/t2i/tinto.py) — ~30 lines, same pattern as deepinsight.py
+- Implement S-IGTD wrapper (src/t2i/s_igtd.py) — ~30 lines, uses class labels in distance computation
+- Add overlap diagnostics (OF/OP metrics) to T2I pipeline
+- Checkpoint 4: Run all experiments (60 CNN configs + 9 baselines)
 - Checkpoint 5: Generate comparison tables and figures
 - Checkpoint 6: Write the paper

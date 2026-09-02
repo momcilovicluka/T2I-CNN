@@ -299,3 +299,26 @@ sufficient spatial tokens for self-attention mechanisms."
 **Paper statement:** "All experiments were evaluated using stratified 5-fold
 cross-validation. Results are reported as mean +/- standard deviation to quantify
 variance and ensure statistical significance of observed differences."
+
+
+## PART 8: SLR-Based References (Must Cite)
+
+### 8a. Large-Scale Benchmark Context
+- Liu et al. (2026, Information Fusion): 9 T2I methods, 24 datasets
+- Table2Image+VIF beats XGBoost (0.879 vs 0.868 accuracy)
+- Your work: compare 5 methods on 3 datasets (smaller but focused)
+
+### 8b. S-IGTD Supervised Topology
+- S-IGTD consistently outperforms unsupervised IGTD by 5-8%
+- Uses between-group correlation to place class-discriminative features locally
+- Reference: Zhang et al. (2024), supervised topology for multi-class problems
+
+### 8c. TINTO Blurring
+- TINTO adds spatial smoothing to DeepInsight-style projections
+- Reduces sharp transitions, creates continuous gradients for CNN kernels
+- Reference: TINTOlib documentation and papers
+
+### 8d. Overlap Diagnostics
+- OF (Overlapped Features) and OP (Overlapped Pixels) metrics
+- Quantify lossy compression in projection-based methods
+- Reference: DeepInsight FDM analysis (Sharma et al., 2019)
