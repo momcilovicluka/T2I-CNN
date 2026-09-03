@@ -198,9 +198,13 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     metrics['final_val_loss'] = history['val_loss'][-1]
     metrics['history'] = history
 
-    # 11. Save results
+    # 11. Save model weights (needed for Grad-CAM visualization)
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
+    model_file = output_path / f"{dataset}_{t2i_method}_{cnn_arch}_model.pt"
+    torch.save(model.state_dict(), model_file)
+
+    # 12. Save results
     result_file = output_path / f"{dataset}_{t2i_method}_{cnn_arch}.json"
 
     # Convert numpy types for JSON serialization

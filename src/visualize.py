@@ -554,6 +554,137 @@ def plot_density_vs_performance(results, output_dir='results/figures'):
 
 
 # ============================================================
+# Figure: Grad-CAM Heatmaps
+# ============================================================
+
+def plot_gradcam_grid(results_dir='results', output_dir='results/figures', n_samples=2):
+    """Generate Grad-CAM heatmaps for each T2I method.
+
+    WHY: The most important interpretability figure. Shows whether
+    the CNN actually uses the spatial structure created by T2I methods.
+    If DeepInsight's heatmap shows spread-out attention while Naive's
+    shows one corner, it proves T2I spatial mapping matters.
+
+    Layout per dataset: rows = T2I methods, columns = original | overlay | heatmap
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    import torch
+    sys.path.insert(0, str(Path(__file__).parent))
+    from src.preprocessing import preprocess_dataset
+    from src.t2i import T2ITransformer
+    from src.gradcam import generate_gradcam, overlay_heatmap
+    from src.models.shallow_cnn import ShallowCNN
+    from src.models.resnet_wrapper import ResNetWrapper
+
+    # Use ShallowCNN for Grad-CAM (most interpretable, standard conv layers)
+    arch = 'shallow'
+    model_class = ShallowCNN
+
+    for dataset in DATASETS:
+        print(f"\nGrad-CAM for {dataset}...")
+
+        # Load data
+        data = preprocess_dataset(dataset)
+        X_train, X_val, X_test = data['X_train'], data['X_val'], data['X_test']
+        y_train, y_val, y_test = data['y_train'], data['y_val'], data['y_test']
+        num_classes = len(np.unique(y_train))
+
+        # Sample balanced test samples
+        sample_indices = []
+        for c in range(num_classes):
+            class_indices = np.where(y_test == c)[0]
+            chosen = np.random.RandomState(42).choice(
+                class_indices, size=min(n_samples, len(class_indices)), replace=False
+            )
+            sample_indices.extend(chosen)
+        sample_indices = sample_indices[:n_samples * num_classes]
+
+        # Prepare figure: rows = methods, columns = original/overlay/heatmap
+        n_methods = len(T2I_METHODS)
+        n_show = len(sample_indices)
+        fig, axes = plt.subplots(
+            n_methods, n_show * 3,
+            figsize=(4 * n_show * 3, 3.5 * n_methods)
+        )
+        if n_methods == 1:
+            axes = axes.reshape(1, -1)
+
+        for row, method in enumerate(T2I_METHODS):
+            # Load model
+            model = model_class(num_classes=num_classes)
+            model_path = Path(results_dir) / f"{dataset}_{method}_{arch}_model.pt"
+            if not model_path.exists():
+                print(f"  No model for {method}, skipping")
+                for col in range(n_show * 3):
+                    axes[row, col].axis('off')
+                continue
+
+            model.load_state_dict(torch.load(model_path, map_location='cpu'))
+            model.eval()
+
+            # Fit T2I on train
+            t2i = T2ITransformer(method=method, image_size=32)
+            t2i.fit(X_train, y_train)
+
+            # Transform test samples
+            sample_X = X_test[sample_indices]
+            sample_y = y_test[sample_indices]
+            sample_imgs = t2i.transform(sample_X, sample_y)
+
+            for col_idx, s_idx in enumerate(range(n_show)):
+                img = sample_imgs[s_idx]  # (1, 32, 32)
+                true_label = sample_y[s_idx]
+
+                # Get prediction
+                with torch.no_grad():
+                    output = model(img.unsqueeze(0))
+                    pred = output.argmax(dim=1).item()
+                    conf = torch.softmax(output, dim=1)[0, pred].item()
+
+                # Generate Grad-CAM
+                try:
+                    heatmap = generate_gradcam(model, img, pred, arch)
+                except Exception as e:
+                    print(f"  Grad-CAM failed for {method} sample {s_idx}: {e}")
+                    axes[row, col_idx * 3].axis('off')
+                    axes[row, col_idx * 3 + 1].axis('off')
+                    axes[row, col_idx * 3 + 2].axis('off')
+                    continue
+
+                # Original image
+                orig = img.squeeze().numpy()
+                axes[row, col_idx * 3].imshow(orig, cmap='gray', vmin=0, vmax=1)
+                axes[row, col_idx * 3].set_title(
+                    f"{T2I_LABELS[method]}\nTrue={int(true_label)}, Pred={pred}"
+                    f"\nConf={conf:.2f}", fontsize=8
+                )
+                axes[row, col_idx * 3].axis('off')
+
+                # Overlay
+                overlay = overlay_heatmap(orig, heatmap, alpha=0.5)
+                axes[row, col_idx * 3 + 1].imshow(overlay)
+                axes[row, col_idx * 3 + 1].set_title('Grad-CAM Overlay', fontsize=8)
+                axes[row, col_idx * 3 + 1].axis('off')
+
+                # Heatmap only
+                axes[row, col_idx * 3 + 2].imshow(heatmap, cmap='jet', vmin=0, vmax=1)
+                axes[row, col_idx * 3 + 2].set_title('Heatmap', fontsize=8)
+                axes[row, col_idx * 3 + 2].axis('off')
+
+        fig.suptitle(
+            f'Grad-CAM: Which pixels does ShallowCNN focus on?\n({DATASET_LABELS[dataset]})',
+            fontsize=14, fontweight='bold', y=1.02
+        )
+        plt.tight_layout()
+        path = output_path / f'ch4_gradcam_{dataset}.png'
+        fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+        plt.close(fig)
+        print(f"  Saved: {path.name}")
+
+
+# ============================================================
 # Main
 # ============================================================
 
@@ -903,6 +1034,9 @@ def main():
 
     print("\n=== New: Overlap Diagnostics ===")
     plot_overlap_diagnostics()
+
+    print("\n=== New: Grad-CAM Heatmaps ===")
+    plot_gradcam_grid()
 
     print(f"\nAll figures saved to {Path(args.results_dir) / 'figures'}/")
 
