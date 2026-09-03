@@ -8,6 +8,10 @@
 > za svaku konfiguracionu odluku. Jezik i stil prate prethodni seminarski rad iz
 > Mašinskog učenja („Mašinsko učenje u IDS“): gusta formalna proza, numerisane
 > formule, slike/tabele/listinzi sa oznakama, reference u IEEE stilu [n].
+>
+> Poglavlje **5. Implementacija** sadrži isečke iz koda (listingi 5.1–5.11) sa
+> objašnjenjima *zašto* je svaki pristup izabran; listingi su skraćeni izvodi —
+> pre prenosa u rad proveriti da odgovaraju aktuelnom stanju repozitorijuma.
 
 ---
 
@@ -38,7 +42,7 @@ ručnog konstruisanja karakteristika [1], [2], [3].
 
 Motivacija za ovakav pristup nije trivijalna: preslikavanje u sliku je
 **gubitna transformacija** — konačan broj atributa mora se rasporediti po
-diskretnoj mreži piksela, pri čemu raspored direktno određuje šta konvolucioni
+diskretnoj mreži piksela, pri čemu raspored direktno određuje šta konvoluciona
 jezgra „vide“. Naivno rešenje (redom pakovati atribute u mrežu) ne koristi
 informaciju o povezanosti atributa, dok naprednije metode pokušavaju da u prostor
 slike prenesu **statističku strukturu podataka**: slični (korelisani) atributi
@@ -63,8 +67,10 @@ Rad je organizovan na sledeći način. U **odeljku 2** dat je pregled stanja u
 oblasti konverzije tabelarnih podataka u slike. **Odeljak 3** uvodi teorijske
 osnove: postupke preslikavanja, konvolucione arhitekture i metrike. **Odeljak 4**
 opisuje eksperimentalnu postavku: skupove podataka, protokol treninga i
-hiperparametre. **Odeljak 5** prikazuje rezultate, a **odeljak 6** ih diskutuje.
-**Odeljak 7** sadrži zaključak, a **odeljak 8** reference i priloge.
+hiperparametre. **Odeljak 5** daje pregled implementacije — organizaciju koda,
+ključne isečke sa obrazloženjima i dijagram toka podataka. **Odeljak 6**
+prikazuje rezultate, a **odeljak 7** ih diskutuje. **Odeljak 8** sadrži
+zaključak, a **odeljak 9** reference i priloge.
 
 ---
 
@@ -144,7 +150,7 @@ bikubičnom interpolacijom skalira na $h \times w$. Intenziteti se normalizuju
 min-max skaliranjem na opseg $[0,1]$, pri čemu se minimum i maksimum računaju
 **isključivo na trening skupu** (u ranijoj verziji koda normalizacija po
 podskupu izazivala je različite opsege za trening/validaciju/test — curenje
-informacija; ispravljeno čuvanjem statistika u fazi `fit`).
+informacija; ispravljeno čuvanjem statistika u fazi `fit`, listing 5.3).
 
 Prednosti: jednostavnost i determinizam. Mane: raspored prati ulazni redosled
 atributa i ne vodi računa o njihovoj povezanosti; visoko korelisani atributi
@@ -198,7 +204,7 @@ konvoluciona jezgra $3\times3$ mogu da „uhvate“ i na uređenoj prostornoj sk
 TINTO je jedina od korišćenih metoda koja **ne garantuje** opseg $[0,1]$ nakon
 umekšavanja (vrhovi se kompresuju; izmereno je do ~0,30 na skupu Breast Cancer),
 pa se njegov izlaz normalizuje statistikama prvog (trening) transforma — detalj
-koji je presudan za ispravan rad pretreniranih mreža (videti 3.5).
+koji je presudan za ispravan rad pretreniranih mreža (videti 3.4 i 5.6).
 
 ### 3.2.5 S-IGTD (koncept; nije deo finalnog poređenja)
 
@@ -263,7 +269,7 @@ ImageNet statistikama (srednja vrednost $[0.485, 0.456, 0.406]$, standardno
 odstupanje $[0.229, 0.224, 0.225]$). Siva slika se ponavljanjem kanala prevodi u
 RGB pre normalizacije; prvi konvolucioni sloj zadržava originalne trokanalne
 težine (ovo je bila kritična ispravka tokom razvoja — bez normalizacije
-pretrenirani modeli su kolabirali na predviđanje jedne klase).
+pretrenirani modeli su kolabirali na predviđanje jedne klase; listing 5.6).
 
 Funkcija gubitka je unakrsna entropija sa:
 - **klasnim težinama** (inverzna učestanost klasa, sklearn `compute_class_weight`
@@ -286,9 +292,9 @@ $\log 2 \approx 0{,}698$ — odgovara uniformnim predikcijama), dok pri
 $10^{-4}$ (uobičajeni opseg za fino podešavanje ViT-a) isti model uči normalno.
 Zato finalni protokol koristi $lr_{ViT} = 10^{-4}$, a za sve ostale arhitekture
 $10^{-3}$ — odluka zasnovana na kriterijumu „obučljivosti“, ne na pogađanju
-performansi (detalji i dokazni eksperiment u PART 12 priručnika). **Unutar svake
-arhitekture stopa je ista za sve T2I metode**, pa poređenje metoda ostaje
-nekontaminirano.
+performansi (detalji i dokazni eksperiment u PART 12 priručnika; listing 5.8).
+**Unutar svake arhitekture stopa je ista za sve T2I metode**, pa poređenje
+metoda ostaje nekontaminirano.
 
 Fino podešavanje pretreniranih modela rađeno je klasičnim treningom svih slojeva
 sa jednom stopom učenja (prema gornjoj tabeli). Dvofazna strategija LP-FT
@@ -370,7 +376,7 @@ Sve metode generišu **monohromatske slike 32×32**, normalizovane na $[0,1]$:
 naivna metoda preko min-max statistika sa treninga, DeepInsight preko interne
 MinMax skalacije TINTOlib-a, IGTD deljenjem izlaznog opsega $[0,255]$ sa 255,
 a TINTO preko statistika prvog (trening) transforma. Fiksna veličina 32×32 za
-sve skupove i metode održava **identičan platno** u svim ćelijama matrice —
+sve skupove i metode održava **identično platno** u svim ćelijama matrice —
 jedina promenljiva između ćelija je raspored atributa (dijagnostika je pokazala
 da povećanje platna na 128 ne pomaže: parametri umekšavanja TINTOlib-a ne
 skaliraju se sa platnom). Generator slučajnih brojeva fiksiran je na 42 (globalno
@@ -398,22 +404,22 @@ Zajednički hiperparametri za sve eksperimente: Adam, weight decay $10^{-4}$,
 label smoothing 0,1, klasne težine `'balanced'`, rano zaustavljanje 15 epoha,
 scheduler (faktor 0,5, strpljenje 5), maksimalno 50 epoha, batch 32, seme 42.
 **Nikakvo podešavanje hiperparametara po metodi nije vršeno** — svesna odluka
-radi fer poređenja, i ona važi i za baselajne modele. Listing 4.1 prikazuje
-konfiguraciju treninga u kodu.
+radi fer poređenja, i ona važi i za baselajne modele. Konfiguracija treninga u
+kodu data je na listingu 4.1.
 
 ```
 # run_all.py — zajednički train_config (izvod)
 train_config = {
     'epochs': 50,
-    'lr': ARCH_LR[cnn_arch],        # 1e-3, osim vit: 1e-4
+    'lr': ARCH_LR[cnn_arch],        # 1e-3, osim vit: 1e-4 (listing 5.8)
     'weight_decay': 1e-4,
-    'early_stopping_patience': 15,
+    'early_stopping_patience': 15,  # odnos sa scheduler-om: listing 5.7
     'label_smoothing': 0.1,
     'class_weights': class_weights, # sklearn 'balanced' na y_train
     'device': 'cuda' if torch.cuda.is_available() else 'cpu',
 }
 ```
-Listing 4.1. Konfiguracija treninga CNN modela.
+Listing 4.1. Konfiguracija treninga CNN modela (`run_all.py`, skraćeno).
 
 ## 4.5 Baselajni (klasično ML)
 
@@ -424,7 +430,7 @@ validacije). Svi su trenirani **podrazumevanim/referentnim konfiguracijama bez
 podešavanja**, isključivo na trening redu (istim redovima kao CNN — validacija
 se koristi samo za rano zaustavljanje CNN modela i nikada nije deo treninga
 baselajna). Namerno odsustvo podešavanja mora se imati u vidu pri čitanju
-razlika CNN vs baselajn (ograničenje, odeljak 6).
+razlika CNN vs baselajn (ograničenje, odeljak 7).
 
 ## 4.6 Evaluacija i protokol validacije
 
@@ -441,8 +447,8 @@ Da bi se dokazalo da **prostorna struktura** (a ne puka činjenica da je ulaz
 DeepInsight/ShallowCNN po skupu, uz preostale kombinacije gde je navedeno):
 
 1. **Mešanje piksela (pixel shuffling):** ista permutacija piksela primenjena na
-   sve test slike. Ako F1 značajno opadne (>0,02), CNN zaista koristi prostorni
-   raspored; ako ne, transformacija se svodi na vektor.
+   sve test slike (listing 5.11). Ako F1 značajno opadne (>0,02), CNN zaista
+   koristi prostorni raspored; ako ne, transformacija se svodi na vektor.
 2. **Redosled atributa (feature ordering):** porede se originalni, nasumični
    (fiksno seme), obrnuti i redosled sortiran po apsolutnoj korelaciji sa
    ciljnom klasom. Ako poredak utiče na F1, aranžman je relevantan.
@@ -466,62 +472,526 @@ nedostajuće eksperimente; iskvareni fajlovi se automatski ponovo rade.
 
 ---
 
-# 5. Rezultati
+# 5. Implementacija
+
+Ovo poglavlje vodi kroz implementaciju sistema: organizaciju koda i tok
+podataka (5.1), a zatim, redom kako se podaci kreću kroz protokol, ključne
+isečke koda sa obrazloženjima (5.2–5.10). Cilj je da se pokaže ne samo *šta*
+kod radi, već i *zašto* je svaka odluka doneta — uključujući i nekoliko
+suptilnih grešaka koje su otkrivene i ispravljene tokom razvoja, jer upravo one
+oslikavaju osetljiva mesta celokupnog T2I protokola.
+
+## 5.1 Organizacija koda i tok podataka
+
+Projekat je organizovan u module prema odgovornostima:
+
+| Fajl / modul | Odgovornost |
+|---|---|
+| `run_all.py` | orkestrator: eksperimentalna matrica, resume, agregacija u CSV |
+| `src/preprocessing.py` | učitavanje skupova, kodiranje, podela, skaliranje |
+| `src/t2i/` | postupci preslikavanja (naive, tinto, deepinsight, igtd) + OF/OP dijagnostika |
+| `src/models/` | ShallowCNN, ResNet-18 (pretrenirani/od nule), ViT-Base |
+| `src/train.py` | petlja treninga, seeds, klasne težine, ImageNet normalizacija |
+| `src/evaluate.py` | metrike na test skupu |
+| `src/ablation.py` | ablacije (pixel shuffling, feature ordering, LP-FT) |
+| `src/visualize.py`, `src/visualize_t2i.py`, `src/gradcam.py` | slike za rad |
+
+Tok podataka od sirovog skupa do rezultata dat je na Slici 5.1
+(ekvivalent u ASCII zapisu na Slici 5.2, radi lakšeg prenosa u uređivač teksta).
+
+```mermaid
+flowchart TD
+    A["Skup podataka (CSV / sklearn)"] --> B["Preprocesiranje<br/>čišćenje · one-hot · StandardScaler"]
+    B --> C["Stratifikovana podela 80/10/10<br/>istа za SVE metode · seed 42"]
+    C --> D["Scaler: fit samo na treningu"]
+    D --> E["T2I fit na X_train<br/>(koordinate / statistike)"]
+    E --> F["transform → slike (N, 1, 32, 32) ∈ [0,1]<br/>deterministički (seed 42)"]
+    F --> G["DataLoader (batch = 32)"]
+    G --> H{"Arhitektura?"}
+    H -->|"od nule (shallow, resnet_scratch)"| I["1 kanal (siva slika)<br/>lr = 1e-3"]
+    H -->|"pretrenirani (resnet, vit)"| J["3 kanala + ImageNet normalizacija<br/>lr = 1e-3 (resnet) / 1e-4 (vit)"]
+    I --> K["Trening: CrossEntropy + klasne težine<br/>+ label smoothing · Adam · scheduler ·<br/>rano zaustavljanje (15) · max 50 epoha"]
+    J --> K
+    K --> L["Evaluacija na test skupu<br/>Acc · Prec · Rec · F1 · ROC/PR-AUC"]
+    L --> M["Čuvanje: JSON (atomski) + model.pt<br/>→ resume prepoznaje kompletne rezultate"]
+    M --> N["Agregacija + slike<br/>(heatmap, ROC, Grad-CAM, ablacije, OF/OP)"]
+```
+
+Slika 5.1. Dijagram toka podataka — od skupa do rezultata (Mermaid zapis).
+
+```
+┌────────────┐   ┌──────────────────────────┐   ┌──────────────────────┐
+│ Skup       │──▶│ Preprocesiranje          │──▶│ Podela 80/10/10      │
+│ (CSV)      │   │ čišćenje, one-hot,       │   │ stratifikovano       │
+│            │   │ StandardScaler           │   │ (ista za sve, seed 42)│
+└────────────┘   └──────────────────────────┘   └──────────┬───────────┘
+                                                           │ scaler fit na treningu
+                                                            ▼
+┌──────────────────────┐    ┌───────────────────────────────────────────┐
+│ T2I fit na X_train   │───▶│ transform → slike (N,1,32,32) ∈ [0,1]     │
+│ koordinate/statistike│    │ naive · tinto · deepinsight · igtd (seed) │
+└──────────────────────┘    └───────────────────┬───────────────────────┘
+                                                │
+                                                ▼
+                        ┌───────────────────────────────────────────────┐
+                        │ Model:  od nule → 1 kanal, lr 1e-3            │
+                        │         pretrenirani → 3 kanala + ImageNet    │
+                        │         normalizacija, lr 1e-3 / 1e-4 (vit)   │
+                        └───────────────────┬───────────────────────────┘
+                                                │
+                                                ▼
+                     ┌───────────────────────────────────────────────────────┐
+                     │ Trening: CrossEntropy + klasne težine + smoothing     │
+                     │ Adam · scheduler · early stop 15 · max 50 epoha       │
+                     └───────────────────┬───────────────────────────────────┘
+                                         ▼
+                ┌────────────────────────────────────────────────────────────┐
+                │ Evaluacija na testu: Acc, Prec, Rec, F1, ROC/PR-AUC       │
+                │ Čuvanje: JSON (atomski) + model.pt (za Grad-CAM)          │
+                └───────────────────┬────────────────────────────────────────┘
+                                    ▼
+                     Agregacija + slike: heatmap, ROC, Grad-CAM,
+                     ablacije, OF/OP, gustina
+```
+
+Slika 5.2. Dijagram toka podataka (ASCII zapis, pogodan za Word/LaTeX).
+
+## 5.2 Priprema podataka bez curenja informacija
+
+Prvi i najvažniji princip protokola: **nijedna statistika ne sme da „vidi“
+validacioni ili test deo**. Zato se podela vrši prva, skaliranje se fituje samo
+na treningu, a T2I transformacije se fituju samo na trening skupu. Listing 5.1
+prikazuje jezgro funkcije `preprocess()`.
+
+```
+def preprocess(X, y, test_size=0.2, val_size=0.1, random_state=42):
+    # 1) prva podela: train+val vs test (stratifikovano)
+    X_temp, X_test, y_temp, y_test = train_test_split(
+        X, y, test_size=test_size, stratify=y, random_state=random_state)
+    # 2) druga podela: train vs val (relativna veličina 10% od 80%)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_temp, y_temp, test_size=val_size / (1 - test_size),
+        stratify=y_temp, random_state=random_state)
+    # 3) StandardScaler: fit ISKLJUČIVO na treningu
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train).astype(np.float32)
+    X_val   = scaler.transform(X_val).astype(np.float32)
+    X_test  = scaler.transform(X_test).astype(np.float32)
+    return X_train, X_val, X_test, y_train, y_val, y_test
+```
+Listing 5.1. Stratifikovana podela i skaliranje bez curenja informacija
+(`src/preprocessing.py`, skraćeno).
+
+**Zašto ovako:** (i) `stratify` čuva udele klasa u svakom podskupu — kritično za
+disbalansirane skupove; (ii) isti `random_state` u obe podele obezbeđuje
+determinizam; (iii) skaliranje se *fituje na treningu*, a *primenjuje* na
+val/test — inače bi vrednosti test primera indirektno uticale na trening
+(curenje informacija). Za Adult Income dodatno se zvanična UCI podela spaja i
+ponovo deli istom funkcijom, jer originalna podela nije stratifikovana po
+ciljnoj klasi; ovim se dobija jedna zajednička podela koju koriste **svi**
+modeli (CNN, baselajni i ablacije), što čini poređenja unutrašnje poštenim.
+
+## 5.3 Zajednički interfejs za T2I metode
+
+Sve metode preslikavanja izložene su kroz jedinstven interfejs sa fazama
+`fit`/`transform` (Listing 5.2), po uzoru na scikit-learn konvenciju.
+
+```
+class T2ITransformer:
+    METHODS = {'naive': NaiveReshape, 'tinto': TINTO,
+               'deepinsight': DeepInsight, 'igtd': IGTD}
+
+    def __init__(self, method='naive', image_size=32, auto_size=False, **kwargs):
+        self.transformer = self.METHODS[method](image_size=image_size, **kwargs)
+
+    def fit(self, X_train, y_train=None):
+        # koordinate/statistike se uče ISKLJUČIVO na trening skupu
+        self.transformer.fit(X_train, y_train)
+        return self
+
+    def transform(self, X, y=None):
+        return self.transformer.transform(X, y)   # -> (N, 1, H, W)
+```
+Listing 5.2. Zajednički interfejs T2I metoda (`src/t2i/__init__.py`, skraćeno).
+
+**Zašto ovako:** ugovor „`fit` na treningu, `transform` na svemu“ sprečava
+curenje informacija na jednom mestu, a ne u svakoj metodi posebno. Argument
+`y` postoji jer TINTOlib metode interno koriste ciljnu klasu (npr. za
+razmeštanje fajlova po klasama). Veličina slike fiksna je na 32×32 za sve
+metode (isto platno, videti 4.3).
+
+## 5.4 Naivno preslikavanje: lekcija o normalizaciji
+
+Naivna metoda (Listing 5.3) pokazuje dve stvari važne za ceo rad: izbor
+interpolacije i opasnost od normalizacije po podskupu.
+
+```
+def fit(self, X_train, y_train=None):
+    n_features = X_train.shape[1]
+    self.grid_size = int(np.ceil(np.sqrt(n_features)))
+    self.padded_size = self.grid_size ** 2
+    # FIX (curenje informacija): min/max se računaju na TRENINGU i čuvaju
+    padded = np.zeros((X_train.shape[0], self.padded_size), dtype=np.float32)
+    padded[:, :X_train.shape[1]] = X_train
+    grid = padded.reshape(X_train.shape[0], self.grid_size, self.grid_size)
+    self._train_min, self._train_max = grid.min(), grid.max()
+
+def transform(self, X, y=None):
+    padded = np.zeros((X.shape[0], self.padded_size), dtype=np.float32)
+    padded[:, :X.shape[1]] = X
+    images = padded.reshape(X.shape[0], self.grid_size, self.grid_size)
+    if self.grid_size != self.image_size:        # npr. 6x6 -> 32x32
+        # BIKUBIČNO umesto najbližeg suseda: glatkiji prelazi; jezgro 4x4
+        # računa težinske proseke, pa vrednosti mogu preći ulazni opseg —
+        # zato se odmah vrši isecanje (clip)
+        resized = np.stack([np.asarray(
+            Image.fromarray(images[i]).resize(
+                (self.image_size, self.image_size), Image.BICUBIC))
+            for i in range(len(images))], axis=0)
+        images = np.clip(resized, images.min(), images.max())
+    # min-max sa TRENINGA (fiksno), ne po podskupu; zatim isecanje na [0,1]
+    images = (images - self._train_min) / (self._train_max - self._train_min)
+    return torch.tensor(np.clip(images, 0, 1)).unsqueeze(1).float()
+```
+Listing 5.3. Naivno preslikavanje (`src/t2i/naive.py`, skraćeno).
+
+**Dve lekcije iz ovog kratkog koda.** (1) *Interpolacija.* Bikubična
+interpolacija koristi okolinu $4\times4$ i daje glatke prelaze između vrednosti
+atributa i dopunjene zone; najbliži sused pravio bi blokovske artefakte. Pošto
+kubni polinom može da „premaši“ opseg ulaznih vrednosti (ringing efekat),
+odmah nakon skaliranja vrši se isecanje. (2) *Normalizacija.* U ranijoj verziji
+koda min/max su računati *po pozivu* `transform` — za trening, validaciju i
+test dobijali su se različiti opsezi (npr. test maksimum 1,25 umesto 1,0), što
+je menjalo raspodelu piksela po podskupu i predstavljalo oblik curenja
+informacija. Ispravka: statistike se računaju jednom, u `fit()`, na treningu,
+i primenjuju na sve podskupove.
+
+## 5.5 TINTOlib integracija i poravnanje primera sa slikama
+
+Biblioteka TINTOlib ne vraća tenzore direktno — slike upisuje na disk
+(po klasama, sa imenima fajlova koja odgovaraju *rednom broju* primera u
+DataFrame-u). Listing 5.4 pokazuje kako se slike čitaju **po indeksu** primera.
+
+```
+def _load_tinto_images(temp_dir, N, y):
+    images = []
+    for i in range(N):
+        label = int(y[i]) if y is not None else 0
+        subfolder = str(label).zfill(2)          # klasa -> podfolder
+        filename = str(i).zfill(6) + '.npy'      # indeks -> ime fajla
+        img_path = os.path.join(temp_dir, subfolder, filename)
+        if not os.path.exists(img_path):         # kontrola poravnanja
+            raise FileNotFoundError(f"TINTOlib image not found: {img_path} ...")
+        images.append(np.load(img_path))
+    return np.stack(images)
+```
+Listing 5.4. Čitanje slika po indeksu primera (`src/t2i/__init__.py`).
+
+**Zašto je ovo kritično:** TINTOlib dodatno upisuje CSV koji fajlove navodi u
+*redosledu imena*, a ne u redosledu ulaznog DataFrame-a. Ako bi se slike čitale
+iz tog CSV-a, svaki promenjen redosled ulaznih primera (npr. zbog seed-ovanog
+šufovanja) tihо bi pomešao slike i labele. Konstrukcija imena fajla iz indeksa
+primera garantuje tačno poravnanje `slika(i) ↔ primer(i)`, a eksplicitna provera
+postojanja fajla odmah otkriva svaki nesklad umesto da rezultuje tihim
+pogrešnim rezultatom.
+
+## 5.6 Problem opsega piksela: [0,1] mora biti zagarantovan
+
+Tokom razvoja otkriveno je da TINTO (za razliku od DeepInsight/IGTD) **ne
+normalizuje izlaz na [0,1]**: umekšavanje kompresuje vrhove, pa su vrednosti
+na Breast Cancer skupu dostizale tek ~0,30. Pošto pretrenirani modeli primenjuju
+ImageNet normalizaciju sa sredinom 0,485, *svi* pikseli TINTO slika postajali
+su negativni i ReLU aktivacija u prvom sloju je „gasila“ signal — pretrenirani
+modeli nikada nisu naučili. Rešenje (Listing 5.5): normalizacija statistikama
+prvog (trening) transforma, uz isecanje na [0,1].
+
+```
+# FIX: TINTOlib-ov TINTO ne skalira na [0,1] (blur kompresuje vrhove,
+# npr. max ~0.30 na Breast Cancer). Posle ImageNet normalizacije
+# (sredina 0.485) SVI pikseli bi bili negativni -> pretrenirani ReLU kolabira.
+if self._pix_min is None:          # keš sa PRVOG (trening) transforma
+    self._pix_min = float(images.min())
+    self._pix_max = float(images.max())
+rng = self._pix_max - self._pix_min
+if rng > 1e-8:
+    images = (images - self._pix_min) / rng
+images = np.clip(images, 0, 1)     # konačna garancija opsega
+```
+Listing 5.5. Normalizacija TINTO izlaza statistikama trening transforma
+(`src/t2i/tinto.py`, skraćeno).
+
+**Zašto baš prvi transform:** `run_all.py` uvek transformiše trening pre
+validacije/testa, pa se keš puni isključivo trening statistikama (bez curenja).
+**Zašto je važno i za slike u radu:** isti keš se čuva u JSON rezultata i
+koristi pri generisanju Grad-CAM slika, da prikazane slike odgovaraju tačno
+onom što je mreža videla tokom treninga. Ovakav, naizgled sitan detalj opsega
+vrednosti imao je presudan uticaj na to da li transfer učenje uopšte funkcioniše
+— pouka koja se retko pominje u literaturi o T2I metodama.
+
+## 5.7 Modeli: kanali ulaza i ImageNet normalizacija
+
+Izbor arhitekture i oblik ulaza koncentrisani su u `create_cnn_model()`
+(Listing 5.6). Dve stvari su ključne: (i) broj kanala prvog konvolucionog
+sloja mora da odgovara onome što mreža zaista dobija; (ii) pretrenirani modeli
+dobijaju ImageNet-normalizovan RGB ulaz.
+
+```
+def create_cnn_model(arch, num_classes):
+    # pretrenirani modeli: input_channels=3 — primaju ImageNet-normalizovan
+    # RGB ulaz (imagenet_normalize ponavlja sivi kanal 3 puta); time se
+    # zadržava originalni 3-kanalni conv1 sa pretreniranim težinama.
+    if arch == 'resnet':          # pretrenirani ResNet-18
+        return ResNetWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
+    if arch == 'vit':             # pretrenirani ViT-Base/16
+        return ViTWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
+    if arch == 'resnet_scratch':  # ResNet-18 od nule -> siva slika, 1 kanal
+        return ResNetWrapper(num_classes=num_classes, pretrained=False, input_channels=1)
+    return ShallowCNN(num_classes=num_classes)   # 1 kanal, od nule
+
+# u src/train.py — primena normalizacije samo za pretrenirane modele:
+IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
+IMAGENET_STD  = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+
+def imagenet_normalize(images):
+    images_rgb = images.repeat(1, 3, 1, 1)         # (N,1,H,W) -> (N,3,H,W)
+    return (images_rgb - IMAGENET_MEAN.to(images.device)) \
+                     / IMAGENET_STD.to(images.device)
+```
+Listing 5.6. Modeli i ImageNet normalizacija (`run_all.py`, `src/train.py`,
+skraćeno).
+
+**Zašto 3 kanala za pretrenirane modele:** alternativa bi bila zamena prvog
+sloja jednokanalnim (npr. usrednjavanjem težina po kanalima), ali tada model
+više nije „pravi“ pretrenirani model. Ponavljanje sivog kanala u RGB zadržava
+originalne težine, a normalizacija čini da raspodela ulaza odgovara onoj na
+kojoj je mreža trenirana. Modeli od nule rade sa sivim slikama (1 kanal), jer
+nemaju pretrenirane težine koje bi trebalo „uskladiti“ sa domenom.
+
+## 5.8 Petlja treninga: regularizacija i rano zaustavljanje
+
+Listing 5.7 prikazuje srž petlje treninga: funkciju gubitka sa klasnim
+težinama i label smoothing-om, optimizator, raspored stope i rano zaustavljanje.
+
+```
+class_weights = config.get('class_weights', None)
+label_smoothing = config.get('label_smoothing', 0.1)
+criterion = nn.CrossEntropyLoss(
+    weight=class_weights, label_smoothing=label_smoothing)
+
+optimizer = torch.optim.Adam(model.parameters(),
+                             lr=lr, weight_decay=weight_decay)
+scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    optimizer, mode='min', factor=0.5, patience=5)
+
+best_val_loss = float('inf'); epochs_no_improve = 0
+for epoch in range(epochs):
+    ... # treniranje po minibatčevima (ImageNet norm ako je pretreniran)
+    ... # evaluacija na validacionom skupu -> val_loss, val_acc
+
+    scheduler.step(val_loss)            # smanji lr posle 5 epoha bez poboljšanja
+    if val_loss < best_val_loss:
+        best_val_loss = val_loss        # čuvamo NAJBOLJE težine, ne poslednje
+        best_model_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+        epochs_no_improve = 0
+    else:
+        epochs_no_improve += 1
+        if epochs_no_improve >= patience:   # patience = 15
+            break                           # rano zaustavljanje
+model.load_state_dict(best_model_state)
+```
+Listing 5.7. Petlja treninga (`src/train.py`, skraćeno).
+
+**Zašto svaka komponenta:**
+
+- *Klasne težine* (`compute_class_weight(..., 'balanced')`) — bez njih model na
+  disbalansiranim skupovima (Dry Bean ~6,6:1) brzo konvergira ka „uvek
+  predvidi većinsku klasu“. Težine se računaju na `y_train`.
+- *Label smoothing (0,1)* — ciljne raspodele se omekšavaju (npr. [0,9; 0,1]
+  umesto [1, 0]), što smanjuje preteranu samouverenost i pomaže generalizaciju
+  na malim skupovima. Primenjeno uniformno na svim skupovima radi uporedivosti.
+- *ReduceLROnPlateau (faktor 0,5, strpljenje 5)* + *rano zaustavljanje (15)* —
+  odnos strpljenja nije slučajan: posle smanjenja stope modelu treba nekoliko
+  epoha da ponovo počne da napreduje. Sa ranijim strpljenjem 10 ostajalo je
+  samo 5 epoha nakon smanjenja stope — često nedovoljno, pa je trening
+  prekidan prerano. Strpljenje 15 ostavlja 10 epoha „rezerve“ posle svakog
+  smanjenja stope.
+- *Čuvanje najboljih težina po validacionom gubitku* — vraća se model sa
+  najboljom generalizacijom, a ne poslednja epoha.
+- *`mode='min'` + validacioni gubitak* — monitor je gubitak (a ne tačnost),
+  jer je osetljiviji na pogoršanje pouzdanosti predikcija.
+
+## 5.9 Stopa učenja po arhitekturi (ARCH_LR)
+
+Jedno od najvažnijih praktičnih otkrića tokom rada: **ista stopa učenja za sve
+arhitekture nije ispravna** kada među njima postoje pretrenirani modeli.
+Listing 5.8 prikazuje konačno rešenje — tabelu stopa po arhitekturi.
+
+```
+# Per-architecture learning rates.
+# FIX (2026-09-03, provereno): zajedničko lr=1e-3 čini da pretrenirani
+# ViT-B/16 divergira na T2I slikama — trening gubitak zaključan na log(2)
+# (~0.698) kroz 20 epoha, val acc na pragovima klasa, F1~0. Fino podešavanje
+# pretreniranog ViT-a na 1e-3 je ~100x iznad uobičajenog opsega (timm praksa
+# ~1e-5..1e-4). Proba na breast_cancer/tinto: na 1e-4 isti model dostiže
+# ~0.91 val acc u 5 epoha. Modeli od nule i pretrenirani ResNet-18 (BatchNorm
+# robusnost) konvergiraju bez problema na 1e-3, pa se menja SAMO ViT.
+ARCH_LR = {
+    'shallow': 1e-3,
+    'resnet': 1e-3,
+    'resnet_scratch': 1e-3,
+    'vit': 1e-4,
+}
+```
+Listing 5.8. Stope učenja po arhitekturi (`run_all.py`).
+
+**Zašto se promena ne širi na sve modele:** kriterijum je *obučljivost*, ne
+podešavanje performansi. RezNet-18 (pretrenirani) na 1e-3 ostvaruje F1 ≈ 0,972,
+a na 1e-4 ≈ 0,935 (interna provera, Breast Cancer/DeepInsight) — uniformno
+smanjenje stope bi ga *pokvarilo*. Modeli od nule nemaju pretrenirane težine
+koje bi velika stopa uništila. **Poređenja metoda ostaju poštena** jer se
+unutar svake arhitekture stopa ne menja po metodi. Vrednost `lr` upisuje se u
+svaki JSON rezultata, pa je svaki rezultat koji je nastao sa pogrešnom stopom
+lako identifikovati i odbaciti.
+
+## 5.10 Evaluacija, čuvanje i nastavak prekinutog rada
+
+Evaluacija se radi na test skupu odmah po treningu; rezultati se čuvaju
+**atomski** (Listing 5.9), a nastavak rada prepoznaje samo kompletne rezultate.
+
+```
+# upis preko .tmp + os.replace = ATOMSKI upis: prekid (Ctrl+C, Colab timeout,
+# OOM) nikada ne ostavlja polovičan JSON koji bi resume preskočio zauvek
+tmp_file = result_file.with_suffix('.json.tmp')
+with open(tmp_file, 'w') as f:
+    json.dump(metrics, f, indent=2, default=to_serializable)
+os.replace(str(tmp_file), str(result_file))
+
+def _experiment_is_done(result_file):
+    # rezultat je „gotov“ SAMO ako je fajl čitljiv JSON sa ključevima
+    # dataset i f1_macro; iskvarene/polovične fajlove resume ponovo radi
+    if not result_file.exists():
+        return False
+    try:
+        data = json.load(open(result_file))
+        return isinstance(data, dict) and 'dataset' in data and 'f1_macro' in data
+    except (json.JSONDecodeError, OSError):
+        return False
+```
+Listing 5.9. Atomsko čuvanje i validacija rezultata (`run_all.py`, skraćeno).
+
+**Zašto:** eksperimenti traju satima (naročito ViT ćelije); prekid ne sme da
+uništi prethodni rad niti da ostavi fajl koji će nastavak pogrešno smatrati
+završenim. Ovo je čisto inženjerska odluka, ali direktno utiče na pouzdanost
+prikupljenih rezultata. Uz JSON se čuva i `model.pt` (težine) — neophodan za
+Grad-CAM slike naknadno, bez ponovnog treninga.
+
+## 5.11 Interpretabilnost: Grad-CAM i ablacije
+
+Dve vrste koda pokazuju kako se proverava da mreža *zaista koristi* prostornu
+strukturu T2I slika.
+
+**Grad-CAM.** Toplotna mapa pokazuje koji pikseli najviše doprinose odluci.
+Izbor ciljnog sloja zavisi od arhitekture (Listing 5.10): kod ResNet-a se ne
+uzima poslednji blok (`layer4`), jer na ulazu 32×32 on daje karte svega 2×2 —
+neupotrebljivo male; `layer3` daje 4×4 karte.
+
+```
+def get_target_layer(model, arch):
+    if arch == 'shallow':
+        return model.features[8]        # poslednji Conv2d (128 kanala)
+    if arch in ('resnet', 'resnet_scratch'):
+        # layer4 na 32x32 daje karte 2x2 -> premalo; layer3 daje 4x4
+        return model.backbone.layer3[-1].conv2
+```
+Listing 5.10. Izbor ciljnog sloja za Grad-CAM (`src/gradcam.py`).
+
+**Pixel shuffling.** Ablacija iz odeljka 4.7 (Listing 5.11) uništava prostorni
+raspored *bez promene raspodele intenziteta*: ista permutacija primenjuje se na
+sve slike, pa svaki piksel zadržava svoju vrednost, ali na pogrešnom mestu.
+
+```
+def shuffle_pixels(images, seed=42):
+    # ista permutacija za sve primere: raspodela intenziteta ostaje ista,
+    # prostorni odnosi bivaju uništeni -> merimo čist efekat rasporeda
+    rng = np.random.RandomState(seed)
+    N, C, H, W = images.shape
+    perm = rng.permutation(H * W)
+    for i in range(N):
+        images[i, 0] = images[i, 0].reshape(-1)[perm].reshape(H, W)
+```
+Listing 5.11. Ablacija mešanja piksela (`src/ablation.py`, skraćeno).
+
+Ako F1 nakon mešanja značajno opadne, CNN koristi prostornu strukturu; ako ostane
+isti, transformacija je funkcionalno ekvivalentna vektoru — što je najjači
+kontrolni eksperiment celokupnog pristupa.
+
+## 5.12 Šta implementacija govori o rezultatima
+
+Iz implementacije slede tri praktične pouke koje treba imati u vidu pri čitanju
+rezultata (odeljak 6): (1) **redosled transformacija je protokol** — fit na
+treningu, skaliranje/klip na svim podskupovima; (2) **najkritičniji „sitni“
+detalji bili su opseg piksela i poravnanje primera sa slikama**, a ne same
+arhitekture; (3) **stopa učenja pretreniranih modela je deo metodologije**, a ne
+podešavanje — bez nje transfer učenje na T2I slikama jednostavno ne radi.
+
+---
+
+# 6. Rezultati
 
 > Svi brojevi u ovom poglavlju su **TBD** — popunjavaju se nakon finalne serije
 > eksperimenata (`run_all.py` na 48 CNN + 9 baselajna ćelija). Struktura i
 > interpretativni okvir dati su unapred; ne unositi brojeve iz ranijih,
 > nevalidnih verzija protokola (vidi PART 9g, 12a priručnika).
 
-## 5.1 Pregled rezultata po skupovima
+## 6.1 Pregled rezultata po skupovima
 
-### 5.1.1 Breast Cancer Wisconsin
+### 6.1.1 Breast Cancer Wisconsin
 
 - Slika: `ch4_heatmap_breast_cancer.png` (T2I metode × arhitekture, F1).
 - Diskusija: [TBD — koji raspored daje najviši F1; da li pretrenirani modeli
   pomažu na 398 trening primera; poređenje sa baselajnima iz
   `ch4_baseline_comparison.png`; ROC krive `ch4_roc_curves.png`].
-- [TBD]: tabela 5.1 sa svim metrikama.
+- [TBD]: tabela sa svim metrikama (F1 = pozitivna klasa, videti 3.5).
 
-### 5.1.2 Dry Bean
+### 6.1.2 Dry Bean
 
 - Višeklasni skup (7 klasa): prati se makro-F1, po-klasne performanse
   (`ch4_per_class_f1_dry_bean.png`) i matrica konfuzije.
 - [TBD].
 
-### 5.1.3 Adult Income
+### 6.1.3 Adult Income
 
 - Binarni disbalansiran skup (76:24); pozitivna klasa `>50K`.
 - [TBD].
 
-## 5.2 Poređenje sa baselajnima
+## 6.2 Poređenje sa baselajnima
 
 Slika `ch4_baseline_comparison.png`; [TBD — da li neka CNN+T2I kombinacija
 nadmašuje XGBoost i na kojoj margini; napomena da su baselajni nepodešeni].
 
-## 5.3 Transfer učenje
+## 6.3 Transfer učenje
 
 - Uporediti `resnet` (pretrenirani) sa `resnet_scratch` (isti kapacitet, bez
   pretreniranosti) po metodi i skupu → efekat pretreniranosti.
 - [TBD]; diskutovati u svetlu sintetičke prirode slika (odeljak 3.4) i
   činjenice da su pretrenirani modeli primali ImageNet normalizovan RGB ulaz.
 - Za ViT: proveriti da li svaka ćelija pokazuje pad trening gubitka ispod
-  ~0,7 u prvim epohama (potvrda ispravne stope učenja).
+  ~0,7 u prvim epohama (potvrda ispravne stope učenja, odeljak 5.9).
 
-## 5.4 Dijagnostika slika i vizuelna analiza
+## 6.4 Dijagnostika slika i vizuelna analiza
 
 - Primeri slika po metodi i skupu: `t2i_comparison_{dataset}.png`.
 - Gustina: `t2i_density_comparison.png`; preklapanje: `ch4_overlap_diagnostics.png`.
 - Grad-CAM (`ch4_gradcam_{dataset}.png`): [TBD — koji pikseli/regioni
   najviše doprinose klasifikaciji; interpretabilnost na ShallowCNN].
 
-## 5.5 Vreme treninga
+## 6.5 Vreme treninga
 
 - `ch4_runtime_comparison.png`; [TBD — prosečno vreme po arhitekturi i metodi].
 
 ---
 
-# 6. Diskusija
+# 7. Diskusija
 
 [Okvir za pisanje; sadržaj se finalizuje nakon rezultata.]
 
@@ -533,7 +1003,7 @@ služi kao donja granica; njena mana je redosledni raspored bez grupisanja
 sličnih atributa (a ne gustina — gustina je uporediva sa ostalim metodama).
 
 **Transfer učenje na sintetičkim slikama.** [TBD] — pretrenirani ResNet i ViT
-uče opšte obrasce sa prirodnih slika; na T2I slikama raspodela se razlikuje.
+uče opšte obrase sa prirodnih slika; na T2I slikama raspodela se razlikuje.
 Diskutovati odnos `resnet` vs `resnet_scratch`, kao i ViT rezultate uz napomenu
 da je stopa učenja za ViT birana prema praksi finog podešavanja ($10^{-4}$), a
 da su rane verzije protokola sa $10^{-3}$ kolabirale (gubitak zaključan na
@@ -559,7 +1029,7 @@ poređenja metoda treba čitati **unutar** svake arhitekture.
 
 ---
 
-# 7. Zaključak
+# 8. Zaključak
 
 [TBD — sažetak najvažnijih nalaza prema pitanjima iz Uvoda: (1) uloga rasporeda,
 (2) transfer učenje, (3) odnos sa baselajnima, (4) faktori koji objašnjavaju
@@ -574,9 +1044,9 @@ implementacija; savremene arhitekture za tabelarne podatke kao gornja granica
 
 ---
 
-# 8. Reference i prilozi
+# 9. Reference i prilozi
 
-## 8.1 Reference
+## 9.1 Reference
 
 > **Uputstvo:** konačan spisak urediti iz `Notebook/references.bib` (Zotero/
 > BibTeX biblioteka pripremljena tokom prethodnih faza) i numerisati prema
@@ -602,26 +1072,27 @@ implementacija; savremene arhitekture za tabelarne podatke kao gornja granica
 14. A. Kumar i sar., *Fine-Tuning can Distort Pretrained Features* (LP-FT), ICLR 2022.
 15. [Ostalo iz .bib — dopuniti.]
 
-## 8.2 Prilozi
+## 9.2 Prilozi
 
 **Prilog A — Generisane slike i tabele** (mapiranje na fajlove):
 
 | Slika | Fajl | Poglavlje |
 |---|---|---|
-| Primeri slika po metodi i skupu | `results/figures/t2i_comparison_{dataset}.png` | 3.2/5.4 |
-| Gustina slika | `results/figures/t2i_density_comparison.png` | 5.4 |
-| Glavni rezultati (heatmap) | `results/figures/ch4_heatmap_{dataset}.png` | 5.1 |
-| Baselajni | `results/figures/ch4_baseline_comparison.png` | 5.2 |
-| Per-class F1 (Dry Bean) | `results/figures/ch4_per_class_f1_dry_bean.png` | 5.1.2 |
-| Krive učenja | `results/figures/ch4_training_curves_{dataset}.png` | 5.5 |
-| Matrice konfuzije | `results/figures/ch4_confusion_matrices.png` | 5.1 |
-| Ablacije (pixel shuffle, LP-FT) | `results/figures/ch4_ablation_*.png` | 5.x/4.7 |
-| Gustina vs performanse | `results/figures/ch4_density_vs_performance.png` | 5.4 |
-| ROC krive | `results/figures/ch4_roc_curves.png` | 5.1 |
-| Vreme treninga | `results/figures/ch4_runtime_comparison.png` | 5.5 |
+| Dijagram toka podataka | Slika 5.1/5.2 (ovaj dokument) | 5.1 |
+| Primeri slika po metodi i skupu | `results/figures/t2i_comparison_{dataset}.png` | 3.2/6.4 |
+| Gustina slika | `results/figures/t2i_density_comparison.png` | 6.4 |
+| Glavni rezultati (heatmap) | `results/figures/ch4_heatmap_{dataset}.png` | 6.1 |
+| Baselajni | `results/figures/ch4_baseline_comparison.png` | 6.2 |
+| Per-class F1 (Dry Bean) | `results/figures/ch4_per_class_f1_dry_bean.png` | 6.1.2 |
+| Krive učenja | `results/figures/ch4_training_curves_{dataset}.png` | 6.5 |
+| Matrice konfuzije | `results/figures/ch4_confusion_matrices.png` | 6.1 |
+| Ablacije (pixel shuffle, LP-FT) | `results/figures/ch4_ablation_*.png` | 7.x/4.7 |
+| Gustina vs performanse | `results/figures/ch4_density_vs_performance.png` | 6.4 |
+| ROC krive | `results/figures/ch4_roc_curves.png` | 6.1 |
+| Vreme treninga | `results/figures/ch4_runtime_comparison.png` | 6.5 |
 | Raspodela klasa | `results/figures/ch3_class_distribution.png` | 4.1 |
 | Preklapanje (OF/OP) | `results/figures/ch4_overlap_diagnostics.png` | 3.2.6 |
-| Grad-CAM | `results/figures/ch4_gradcam_{dataset}.png` | 5.4 |
+| Grad-CAM | `results/figures/ch4_gradcam_{dataset}.png` | 6.4 |
 
 **Prilog B — Kontrolna lista pri popunjavanju rezultata** (sve tvrdnje moraju
 odgovarati kodu — svaka ima zabeležen razlog u `Plan/paper-statement-guide.md`):
@@ -639,4 +1110,6 @@ odgovarati kodu — svaka ima zabeležen razlog u `Plan/paper-statement-guide.md
 - [ ] S-IGTD pomenuti samo kao srodan pristup (PART 13i, 8b).
 - [ ] Ne koristiti tvrdnje iz PART 7 (LP-FT/CV/adaptivno) — nisu deo protokola.
 - [ ] ViT: opisati stopu 1e-4 kao praksu finog podešavanja (PART 12).
+- [ ] Listinge 5.1–5.11 proveriti pre slanja — skraćeni su izvodi iz aktuelnog
+      koda (fajl je naveden u svakom listingu).
 - [ ] Reference prebaciti iz `Notebook/references.bib`.
