@@ -121,6 +121,24 @@ def create_cnn_model(arch, num_classes):
         raise ValueError(f"Unknown architecture: {arch}")
 
 
+def _experiment_is_done(result_file):
+    """True only if the result JSON exists AND parses as a complete result.
+
+    FIX (audit): Resume previously treated any existing file as done, so a
+    truncated JSON from an interrupted pre-atomic-write run (or any corrupt
+    file) was skipped forever. A corrupt file must be treated as not-done so
+    the experiment is re-run and overwrites it.
+    """
+    if not result_file.exists():
+        return False
+    try:
+        with open(result_file) as f:
+            data = json.load(f)
+        return isinstance(data, dict) and 'dataset' in data and 'f1_macro' in data
+    except (json.JSONDecodeError, OSError):
+        return False
+
+
 def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     """Run one CNN experiment: dataset -> T2I -> CNN -> evaluate.
 
@@ -417,7 +435,7 @@ def main():
             done_count = 0
             for dataset, t2i, cnn in combos:
                 rf = results_dir / f"{dataset}_{t2i}_{cnn}.json"
-                if rf.exists():
+                if _experiment_is_done(rf):
                     done_count += 1
             if done_count > 0:
                 print(f"Resume: {done_count}/{len(combos)} already done, running {len(combos)-done_count} remaining")
@@ -425,7 +443,7 @@ def main():
             print(f"Running {len(combos)} CNN experiments...")
             for i, (dataset, t2i, cnn) in enumerate(combos, 1):
                 result_file = results_dir / f"{dataset}_{t2i}_{cnn}.json"
-                if result_file.exists():
+                if _experiment_is_done(result_file):
                     print(f"\n[{i}/{len(combos)}] {dataset} + {t2i} + {cnn} — SKIP (done)")
                     continue
                 print(f"\n[{i}/{len(combos)}] {dataset} + {t2i} + {cnn}")
@@ -449,7 +467,7 @@ def main():
             done_count = 0
             for dataset, model in combos:
                 rf = results_dir / f"baseline_{dataset}_{model}.json"
-                if rf.exists():
+                if _experiment_is_done(rf):
                     done_count += 1
             if done_count > 0:
                 print(f"Resume: {done_count}/{len(combos)} already done, running {len(combos)-done_count} remaining")
@@ -457,7 +475,7 @@ def main():
             print(f"\nRunning {len(combos)} baseline experiments...")
             for i, (dataset, model) in enumerate(combos, 1):
                 result_file = results_dir / f"baseline_{dataset}_{model}.json"
-                if result_file.exists():
+                if _experiment_is_done(result_file):
                     print(f"\n[{i}/{len(combos)}] {dataset} + {model} — SKIP (done)")
                     continue
                 print(f"\n[{i}/{len(combos)}] {dataset} + {model}")
