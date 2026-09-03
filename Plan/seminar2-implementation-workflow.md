@@ -503,9 +503,13 @@ CHECKPOINT 7              CHECKPOINT 8
 3. **Batch size:** 32 for small datasets, 64 for large
 4. **Early stopping patience:** 10 epochs
 5. **Max epochs:** 50 (most will converge before then)
-6. **Learning rates:**
-   - Shallow CNN: 1e-3
-   - ResNet/ViT backbone: 1e-4, new layers: 1e-3
+6. **Learning rates (final — `ARCH_LR` in run_all.py, commit defb6fb):**
+   - Shallow CNN, ResNet-18 (pretrained), ResNet-18 (scratch): 1e-3
+     (single Adam group)
+   - Pretrained ViT-B/16: 1e-4 — shared 1e-3 diverges on T2I images
+     (train loss pinned at log(2), F1~0); probe-verified 1e-4 learns
+     (~0.91 val acc by epoch 5). See PART 12 in paper-statement-guide.
+   - LP-FT (ablation only): backbone 1e-4, head 1e-3 (two param groups)
 
 ---
 
@@ -776,6 +780,7 @@ statements in `Plan/paper-statement-guide.md` PART 9.
 | 8 | Grad-CAM transformed test samples first → TINTO scale cache seeded from test stats | 🟡 Figure correctness | Persist t2i_pixel_range in result JSON; restore in plot_gradcam_grid; DI/IGTD/S-IGTD reverted to clip-only (native [0,1]); fit() resets cache | 99432a1 |
 | 9 | CNN result JSON written non-atomically — interruption left truncated file resume skipped forever | 🟡 Resume | Atomic write via .json.tmp + os.replace (matches baseline writer) | 43210f4 |
 | 10 | Resume treated any existing file as done, even corrupt/truncated JSON | 🟡 Resume | _experiment_is_done(): file parses as JSON with dataset + f1_macro keys | 70b72c3 |
+| 11 | Pretrained ViT fine-tuned at shared lr=1e-3 diverges on T2I images — train loss pinned at log(2), val acc at priors, F1~0 | 🔴 CRITICAL (result validity) | Per-arch LR: ARCH_LR vit=1e-4, others 1e-3; probe: 0.91 val acc by epoch 5; LR persisted in each result JSON | defb6fb |
 
 **IMPORTANT:** Any results produced before these fixes with pretrained
 models (resnet, vit) or baselines are INVALID. Re-run everything after
@@ -783,3 +788,8 @@ models (resnet, vit) or baselines are INVALID. Re-run everything after
 Issue 1 (no normalization needed), but baselines changed for all.
 Results from before commit 0e20179 are additionally INVALID for ALL
 methods (T2I images were not uniformly scaled to [0,1]).
+
+**Additionally (commit defb6fb):** any `*_vit.json` produced before
+defb6fb was trained at lr=1e-3 and is INVALID (ViT divergence).
+Delete only the ViT result files and re-run those 15 cells via resume;
+non-ViT cells are unaffected and stay valid.

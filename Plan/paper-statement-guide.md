@@ -40,12 +40,12 @@ both factors.
 - Feature density analysis: breast cancer 30 features in 1024 pixels = 2.9%
 
 ### 1.3 Fixed Hyperparameters
-**Write:** "All experiments used identical hyperparameters (learning
-rate=1e-3, epochs=50, early stopping patience=15, weight decay=1e-4,
-label smoothing=0.1) regardless of T2I method or CNN architecture.
-This ensures fair comparison but may disadvantage architectures that
-require different tuning (e.g., ResNet-18 typically needs lower
-learning rates for backbone layers)."
+**Write:** "All experiments used identical hyperparameters (epochs=50,
+early stopping patience=15, weight decay=1e-4, label smoothing=0.1,
+batch size 32) regardless of T2I method or CNN architecture, with one
+exception: the pretrained ViT-B/16 backbone was fine-tuned at
+lr=1e-4 while all other models used lr=1e-3 (see PART 12 — the shared
+1e-3 diverges for ViT)."
 
 **Why:** Different methods may converge at different rates. A learning
 rate optimal for shallow CNN may be too high for ResNet-18, causing
@@ -397,13 +397,18 @@ validation subset from the train fold only.
 epochs to recover after each LR halving. Changed to 15 (commit 8ed8ab8).
 See section 2.4.
 
-### 9e. ViT Degenerate Behavior on Tiny Datasets (Report as Finding)
+### 9e. ViT Collapse on T2I Inputs — SUPERSEDED by PART 12
 
-**Observed (even after fixes):** ViT-Base (85M params) on breast cancer
-(398 train samples) is massively overparameterized. Expect instability
-and worse results than ShallowCNN. This is a legitimate finding —
-capacity mismatch — NOT a bug. Report it as such and reference
-section 1.4 (Architecture Capacity Mismatch).
+**Superseded (2026-09-03, commit defb6fb):** This section previously
+advised reporting the ViT F1~0 collapse as a genuine capacity-mismatch
+finding. Probe evidence proved that wrong: the collapse was an
+optimization artifact of fine-tuning the pretrained ViT-B/16 at the
+shared lr=1e-3 (train loss pinned at log(2) for 20 epochs). At
+lr=1e-4 the identical setup learns normally (~0.91 val acc by epoch 5,
+commit defb6fb, PART 12). Do NOT report the pre-fix ViT zeros as a
+finding and do not cite this section. A residual capacity effect may
+still exist (86M params on 398 samples) but is not what caused the
+collapse; treat ViT results produced at lr=1e-4 as the valid numbers.
 
 ### 9f. Grad-CAM Resolution Limitation
 
@@ -569,18 +574,72 @@ training data for any model.**
 trained on the identical training split. The validation split was used
 exclusively for CNN early stopping."
 
-### 11.4 Identical hyperparameters across methods
+### 11.4 Identical hyperparameters across methods (one LR exception)
 **Verified in `run_all.py` `run_single_experiment()`: one shared
-`train_config` dict (epochs=50, lr=1e-3, weight_decay=1e-4,
+`train_config` dict (epochs=50, weight_decay=1e-4,
 early_stopping_patience=15, label_smoothing=0.1, class_weights,
 device) is used for every CNN experiment, regardless of T2I method or
-architecture. `train_model()` is used for all architectures, including
-pretrained ones. The LP-FT two-phase procedure exists in `src/train.py`
-but is used only by the ablation study (`src/ablation.py`), not by the
-main experiments.**
+architecture. Since commit defb6fb the learning rate is the single
+per-architecture exception: `ARCH_LR` sets 1e-3 for
+shallow/resnet/resnet_scratch and 1e-4 for vit (pretrained ViT
+fine-tuning; see PART 12). Every result JSON records its `lr`.
+`train_model()` is used for all architectures, including pretrained
+ones. The LP-FT two-phase procedure exists in `src/train.py` but is
+used only by the ablation study (`src/ablation.py`), not by the main
+experiments.**
 
 **Paper statement:** "All CNN experiments shared identical
-hyperparameters (Adam, lr=1e-3, weight_decay=1e-4, batch size 32,
+hyperparameters (Adam, weight_decay=1e-4, batch size 32,
 label smoothing 0.1, early stopping patience 15, max 50 epochs)
-regardless of T2I method or architecture; per-method tuning was
-deliberately avoided to keep comparisons fair."
+regardless of T2I method or architecture, with the exception of the
+learning rate for the pretrained ViT (1e-4 vs 1e-3 elsewhere), set
+according to established ViT fine-tuning practice; per-method tuning
+was otherwise deliberately avoided to keep comparisons fair."
+
+---
+
+## PART 12: ViT Learning-Rate Artifact (commit defb6fb)
+
+### 12a. Pretrained ViT Collapse Was an LR Artifact, Not a Sparsity Finding
+
+**Bug:** The main pipeline trained ALL architectures with one shared
+learning rate (lr=1e-3, single Adam group). Fine-tuning a pretrained
+ViT-B/16 at 1e-3 is ~100x the established range (timm practice
+~1e-5..1e-4). On T2I images — especially the sparse-layout methods
+(TINTO/DeepInsight/IGTD/S-IGTD) — every ViT experiment collapsed:
+train loss pinned at log(2) ~0.698 (unable to fit even the training
+set), val loss at the same floor, val acc oscillating at the class
+priors, final F1~0. The earlier collapse was misattributed to input
+sparsity / patch degeneracy (see superseded 9e); a resolution
+diagnostic (native 32 vs 128) showed larger canvases make the sparse
+methods *worse*, ruling out that route.
+
+**Probe evidence (breast_cancer, tinto, ViT-B/16, commit before
+defb6fb):**
+- lr=1e-3 (shared config): train loss >= 0.70 for 20 epochs, early
+  stop at epoch 20, F1~0.
+- lr=1e-4: train loss 1.42 -> 0.42 over 8 epochs, val acc 0.91 best
+  (0.88 final) — learns normally.
+
+**Fix (commit defb6fb):** `ARCH_LR` in `run_all.py` — vit=1e-4,
+shallow/resnet/resnet_scratch=1e-3 (from-scratch models and pretrained
+ResNet-18 converge fine at 1e-3, BatchNorm robustness). The LR is
+persisted in each result JSON (`metrics['lr']`) so any ViT JSON with
+lr=1e-3 is a pre-fix artifact.
+
+**Paper statement (methodology):** "The pretrained ViT-B/16 was
+fine-tuned at a learning rate of 1e-4, while all other models used
+1e-3, following established ViT fine-tuning practice; a shared 1e-3
+was found to make the pretrained ViT diverge (training loss pinned at
+log(2)), whereas 1e-4 converged (validation accuracy >0.9 within five
+epochs on breast cancer)."
+
+**Paper statement (results, if relevant):** "ViT results were produced
+with its architecture-appropriate learning rate; the low scores
+sometimes reported for ViT on tabular-to-image encodings in the
+literature are partly an optimization artifact and should not be read
+as evidence that ViT cannot use such encodings."
+
+**Impact:** Any `*_vit.json` result produced before commit defb6fb
+(trained at lr=1e-3) is INVALID — delete and re-run only the ViT
+cells. Non-ViT cells are unaffected (same code path, same LR).
