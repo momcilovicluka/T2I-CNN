@@ -772,8 +772,14 @@ statements in `Plan/paper-statement-guide.md` PART 9.
 | 4 | cross_validate() used test fold for early stopping (leak) | 🔴 Leak (unused fn) | Split val subset from train fold | 6692c79 |
 | 5 | Early stopping patience=10 too short vs scheduler patience=5 | 🟡 Tuning | patience=15 (10 epochs post-LR-drop) | 8ed8ab8 |
 | 6 | Ablations used patience=10, main experiments 15 | 🟡 Consistency | All use 15 | 6692c79 |
+| 7 | TINTO raw output compressed to ~0.30 max — all pixels negative after ImageNet norm → pretrained ReLU collapses | 🔴 CRITICAL | Train-derived [0,1] rescaling in T2I wrappers (cache from train split) | 0e20179 |
+| 8 | Grad-CAM transformed test samples first → TINTO scale cache seeded from test stats | 🟡 Figure correctness | Persist t2i_pixel_range in result JSON; restore in plot_gradcam_grid; DI/IGTD/S-IGTD reverted to clip-only (native [0,1]); fit() resets cache | 99432a1 |
+| 9 | CNN result JSON written non-atomically — interruption left truncated file resume skipped forever | 🟡 Resume | Atomic write via .json.tmp + os.replace (matches baseline writer) | 43210f4 |
+| 10 | Resume treated any existing file as done, even corrupt/truncated JSON | 🟡 Resume | _experiment_is_done(): file parses as JSON with dataset + f1_macro keys | 70b72c3 |
 
 **IMPORTANT:** Any results produced before these fixes with pretrained
 models (resnet, vit) or baselines are INVALID. Re-run everything after
 `git pull`. Only shallow + resnet_scratch results were unaffected by
 Issue 1 (no normalization needed), but baselines changed for all.
+Results from before commit 0e20179 are additionally INVALID for ALL
+methods (T2I images were not uniformly scaled to [0,1]).

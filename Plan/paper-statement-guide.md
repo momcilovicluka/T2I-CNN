@@ -423,3 +423,156 @@ pretrained models (resnet, vit) is INVALID — those runs lacked
 ImageNet normalization. Also, baselines from before 6692c79 used
 more training data. Discard and re-run everything after pulling
 the fixes.
+
+---
+
+## PART 10: Audit Findings (post-3dc0d32)
+
+Four further bugs were found and fixed after PART 9 was written.
+Each entry records the bug, the fix, and how to state it in the paper.
+
+### 10a. TINTO Raw Output Compressed to ~0.30 Max (CRITICAL — commit 0e20179)
+
+**Bug:** TINTOlib's TINTO does not scale features to [0,1] — its
+blurring compresses peaks (breast cancer images reached only ~0.30
+max, not 1.0). After ImageNet normalization (mean=0.485) is subtracted,
+every TINTO pixel became negative, and pretrained models' first-layer
+ReLU killed all activations. Observed symptom: TINTO + pretrained
+ViT/ResNet never learned (train loss stuck at ~0.70, val acc oscillating
+between 0.63/0.37 = always predicting one class) while from-scratch
+models (which use BatchNorm) survived.
+
+**Fix:** Each T2I wrapper now rescales images to [0,1] using pixel
+min/max cached from the training split only (no leakage), producing
+comparable inputs across all methods. Verified: TINTO+ResNet converges
+immediately after the fix (val acc 0.84 → 0.965 in 5 epochs).
+
+**Paper statement (reproducibility/methodology):** "All T2I methods
+produce single-channel images normalized to [0,1] using statistics
+computed from the training split, so pretrained backbones receive
+comparable input distributions. An earlier implementation where TINTO
+images were left in their raw sub-range (max ≈ 0.30) made all pixels
+negative after ImageNet normalization and prevented pretrained models
+from learning; this was corrected before the final experiments."
+
+**Process note:** All results from runs before 0e20179 are INVALID and
+must be discarded (they were produced with either no T2I rescaling or
+per-split rescaling).
+
+### 10b. Grad-CAM Must Show Training-Scale Images (commit 99432a1)
+
+**Bug:** TINTO's [0,1] scale is cached on the FIRST transform() call.
+The Grad-CAM figure code transformed test samples before training
+samples, seeding the cache from test statistics (max 0.233 vs the
+correct 0.304 from train for breast cancer) — the figure would display
+images scaled differently from what the CNN actually saw.
+
+**Fix:** run_all.py persists the train-derived pixel range
+(`t2i_pixel_range=[min, max]`) into each result JSON, and
+plot_gradcam_grid() restores it before transforming test samples
+(legacy results fall back to seeding from a full training transform,
+which reproduces the same scale). Additionally, an audit showed
+DeepInsight/IGTD/S-IGTD natively output [0,1] (verified empirically),
+so only TINTO keeps the rescale cache; the other wrappers were reverted
+to clip-only, and TINTO.fit() now invalidates the cache on refit.
+
+**Paper statement (visualization section):** "Grad-CAM figures were
+generated from images rescaled with the same training-derived pixel
+statistics used during model training and evaluation, so the displayed
+inputs match the CNN's actual inputs."
+
+### 10c. Non-Atomic Result JSON Writes (commit 43210f4)
+
+**Bug:** CNN result JSONs were written with a direct `open(file, 'w')`.
+An interruption mid-write (Ctrl+C, Colab timeout, OOM) left a truncated
+file that the resume logic — which checked only `exists()` — would SKIP
+forever, silently dropping the experiment from results.
+
+**Fix:** run_single_experiment now writes to `.json.tmp` then
+`os.replace()` (atomic on both POSIX and Windows), matching the
+baseline writer. The model `.pt` is saved first, so an interruption
+between the two writes leaves only a harmless orphan `.pt` that a
+resume re-run overwrites.
+
+**Paper statement:** Not required for the paper body; the atomic write
+guarantees result files are complete, which only affects internal
+resume behavior. No methodological implication.
+
+### 10d. Resume Skipped Corrupt Result Files (commit 70b72c3)
+
+**Bug:** Resume still treated any existing result file as "done" even
+if it was a truncated/corrupt JSON left by a pre-atomic-write run —
+such an experiment was skipped forever and never re-run.
+
+**Fix:** New `_experiment_is_done()` helper: a result counts as done
+only when the file exists AND parses as valid JSON AND carries the
+required `dataset` and `f1_macro` keys. Corrupt files are re-run and
+overwritten. Used for both CNN and baseline resume counts and skips.
+
+**Paper statement:** Not required in the paper body — internal tooling
+robustness only.
+
+---
+
+## 11. Reproducibility Claims Checklist
+
+Each claim below was verified against the current code before writing.
+Phrase them in the paper exactly as stated; do not broaden them.
+
+### 11.1 One fixed train/val/test split per dataset, shared by all methods
+**Verified in `src/preprocessing.py`: `preprocess()` performs two
+stratified `train_test_split` calls (test_size=0.2, then a relative val
+split giving 10% overall), both with `random_state=42`, followed by
+`StandardScaler` fit on the training split only and applied to val/test.
+Every consumer — CNN experiments, baselines, ablations, and figures —
+calls `preprocess_dataset()` with these defaults, so all methods see
+the identical split of each dataset.**
+
+**Paper statement:** "Each dataset was split once into stratified
+train/val/test partitions (80/10/10) with a fixed random seed, and all
+methods — CNNs and tabular baselines — were trained and evaluated on
+these identical partitions."
+
+### 11.2 Deterministic T2I generation per dataset
+**Verified: each T2I wrapper passes `random_seed=42` to its TINTOlib
+model constructor (tinto.py line 64, igtd.py line 43, s_igtd.py line
+96, deepinsight.py line 35), and `set_global_seed(42)` is called before
+every experiment and baseline (run_all.py lines 154 and 279). TINTO in
+particular uses `algorithm='PCA'` + `random_seed=42`, so its
+feature-to-pixel mapping and image generation are deterministic for a
+given training split. The pixel rescale statistics are cached from the
+training split (see 10a/10b), so val/test transforms are deterministic
+too.**
+
+**Paper statement:** "For each dataset, the feature-to-pixel mapping
+was fitted once on the training split with a fixed seed
+(TINTOlib `random_seed=42`; global seed 42 for numpy/PyTorch), making
+image generation deterministic per dataset." (TINTOlib is PCA-based
+with a fixed seed; like any third-party library, bit-level output may
+differ slightly across versions/hardware.)
+
+### 11.3 Baselines trained on the same X_train rows as the CNNs
+**Verified in `run_all.py` `run_baseline()`: RF/XGBoost/MLP load
+`preprocess_dataset()` and train on `X_train` only — never train+val.
+The validation split is reserved for CNN early stopping and is not
+training data for any model.**
+
+**Paper statement:** "All models — CNNs and tabular baselines — were
+trained on the identical training split. The validation split was used
+exclusively for CNN early stopping."
+
+### 11.4 Identical hyperparameters across methods
+**Verified in `run_all.py` `run_single_experiment()`: one shared
+`train_config` dict (epochs=50, lr=1e-3, weight_decay=1e-4,
+early_stopping_patience=15, label_smoothing=0.1, class_weights,
+device) is used for every CNN experiment, regardless of T2I method or
+architecture. `train_model()` is used for all architectures, including
+pretrained ones. The LP-FT two-phase procedure exists in `src/train.py`
+but is used only by the ablation study (`src/ablation.py`), not by the
+main experiments.**
+
+**Paper statement:** "All CNN experiments shared identical
+hyperparameters (Adam, lr=1e-3, weight_decay=1e-4, batch size 32,
+label smoothing 0.1, early stopping patience 15, max 50 epochs)
+regardless of T2I method or architecture; per-method tuning was
+deliberately avoided to keep comparisons fair."
