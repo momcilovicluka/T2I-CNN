@@ -1,5 +1,11 @@
 # Chapter 4 Implementation Steps
 
+> **STATUS 2026-09-03:** STEP 2 (S-IGTD wrapper) was later DROPPED from
+the study — its supervised distance was never used, so it duplicated
+IGTD (paper-statement-guide PART 13i). Final method set: naive, TINTO,
+DeepInsight, IGTD. Experiment counts below (60/69) are superseded by
+48 CNN + 9 baselines = 57.
+
 Split into 7 independent steps. Each produces working, testable code.
 Step 0 updates existing code before anything new.
 

@@ -1,6 +1,16 @@
 """
 S-IGTD: Supervised Image Generator for Tabular Data.
 
+!!! NOT PART OF THE STUDY (dropped 2026-09-03) !!!
+The supervised between-group distance D_B computed here was never fed
+back into the layout optimizer, so this wrapper produced images
+bit-identical to igtd (probe-verified: coordinate and pixel diffs = 0).
+TINTOlib's IGTD only accepts named distance methods, so a genuine
+S-IGTD requires re-implementing the ranking/swap optimization with the
+custom matrix. Rather than ship a duplicate method, s_igtd was removed
+from the experimental grid and figure pipelines. This module is kept
+for reference only. See Plan/paper-statement-guide.md PART 13i.
+
 Unlike unsupervised IGTD which uses Euclidean/Correlation distances
 between raw feature vectors, S-IGTD computes distances using class-wise
 mean statistics. This places class-discriminative features in local

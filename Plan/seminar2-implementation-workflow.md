@@ -701,7 +701,7 @@ python src/visualize.py  # Generate all figures
 | Adult Income | igtd | resnet | Transfer learning |
 | Adult Income | igtd | vit | Transfer learning |
 
-Total: 60 CNN experiments (5 T2I x 3 datasets x 4 architectures) + 9 baselines (RF, XGBoost, MLP) = 69 experiments
+Total: 48 CNN experiments (4 T2I x 3 datasets x 4 architectures) + 9 baselines (RF, XGBoost, MLP) = 57 experiments. (s_igtd dropped 2026-09-03 — duplicated IGTD, guide PART 13i; earlier references to 60/69 and 5 T2I methods are superseded.)
 
 ---
 
@@ -733,7 +733,7 @@ Total: 60 CNN experiments (5 T2I x 3 datasets x 4 architectures) + 9 baselines (
 
 13. **Metric naming caveat**: binary datasets report scikit 'binary' average under the f1_macro key, not true macro — DECISION REQUIRED in guide PART 13e.
 
-14. **Why the supervised distance in S-IGTD is computed but never used**: it is not — confirmed gap. SIGTD.fit() computes D_B (between-group correlation distance) but never feeds it to the layout optimizer, so S-IGTD images are bit-identical to IGTD's (probe-verified: coord diff 0, pixel diff 0). TINTOlib 1.3.1 IGTD accepts only named distance methods, so a real S-IGTD needs the ranking/swap optimizer re-implemented with the supervised matrix, or the method must be dropped. DECISION REQUIRED in guide PART 13i.
+14. **Why the supervised distance in S-IGTD is computed but never used**: it is not — confirmed gap. SIGTD.fit() computes D_B (between-group correlation distance) but never feeds it to the layout optimizer, so S-IGTD images are bit-identical to IGTD's (probe-verified: coord diff 0, pixel diff 0). TINTOlib 1.3.1 IGTD accepts only named distance methods, so a real S-IGTD needs the ranking/swap optimizer re-implemented with the supervised matrix, or the method must be dropped. RESOLVED 2026-09-03: s_igtd dropped from the study (guide PART 13i).
 
 ## CHECKPOINT 3.5: Model Architecture Implementation (COMPLETED)
 
@@ -769,7 +769,7 @@ Total: 60 CNN experiments (5 T2I x 3 datasets x 4 architectures) + 9 baselines (
 ### Remaining work
 
 - Implement TINTO wrapper (src/t2i/tinto.py) — ~30 lines, same pattern as deepinsight.py
-- Implement S-IGTD wrapper (src/t2i/s_igtd.py) — ~30 lines, uses class labels in distance computation
+- ~~Implement S-IGTD wrapper (src/t2i/s_igtd.py)~~ — DONE then DROPPED (2026-09-03): wrapper duplicated IGTD (supervised distance unused); excluded from the study, module kept as reference (guide PART 13i)
 - Add overlap diagnostics (OF/OP metrics) to T2I pipeline
 - Checkpoint 4: Run all experiments (60 CNN configs + 9 baselines)
 - Checkpoint 5: Generate comparison tables and figures

@@ -1,9 +1,14 @@
 """
 Master script to run all experiments for Chapter 4.
 
-Runs 60 CNN experiments (5 T2I x 3 datasets x 4 architectures)
+Runs 48 CNN experiments (4 T2I x 3 datasets x 4 architectures)
 + 9 tabular baselines (RF, XGBoost, MLP x 3 datasets)
-= 69 total experiments.
+= 57 total experiments.
+
+NOTE (2026-09-03): s_igtd was dropped from the study — its wrapper
+computed the supervised between-group distance but never fed it to
+the layout optimizer, so its images were bit-identical to igtd's
+(probe-verified). See Plan/paper-statement-guide.md PART 13i.
 
 Usage:
     python run_all.py                        # All 69 experiments
@@ -25,7 +30,7 @@ import torch
 
 
 DATASETS = ['breast_cancer', 'dry_bean', 'adult_income']
-T2I_METHODS = ['naive', 'tinto', 'deepinsight', 'igtd', 's_igtd']
+T2I_METHODS = ['naive', 'tinto', 'deepinsight', 'igtd']
 CNN_ARCHITECTURES = ['shallow', 'resnet', 'resnet_scratch', 'vit']
 BASELINE_MODELS = ['rf', 'xgboost', 'mlp']
 

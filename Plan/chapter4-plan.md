@@ -1,5 +1,16 @@
 # Chapter 4: Experimental Results and Analysis
 
+> **STATUS 2026-09-03 — read this before writing:** the final protocol
+differs from several statements in this plan. (1) The method set is
+**4 T2I methods** — naive, TINTO, DeepInsight, IGTD. S-IGTD was
+DROPPED (its wrapper duplicated IGTD; paper-statement-guide PART 13i).
+(2) The main table uses plain train_model with ARCH_LR — **no LP-FT**
+and **no 5-fold CV** (LP-FT/CV exist only as unused code; PART 13h).
+(3) Image size is **fixed 32x32 for every method/dataset** — adaptive
+sizing was not adopted (PART 13f). (4) "F1" is macro only for dry_bean;
+for the two binary datasets it is positive-class F1 — label honestly
+(PART 13e).
+
 ## Plan for Seminar Paper — Chapter 4
 
 ---
@@ -40,7 +51,7 @@
 - DeepInsight: compute feature-feature correlation matrix, t-SNE to 2D, assign pixel coordinates, fill with normalized values
 - TINTO: similar to DeepInsight but adds artistic blurring filter to smooth spatial patterns, reducing sharp transitions between adjacent features
 - IGTD: rank feature-feature distances, rank pixel-pixel distances, minimize Frobenius norm via iterative swapping
-- S-IGTD (Supervised IGTD): uses class labels to compute between-group feature distances, placing class-discriminative features in local neighborhoods. Literature shows 5-8% improvement over unsupervised IGTD on multi-class problems
+- ~~S-IGTD~~ (Supervised IGTD): NOT EVALUATED — the wrapper duplicated IGTD and was dropped (paper-statement-guide PART 13i). Reference in Related Work only.
 - Explain adaptive image sizing: minimum 20% feature density (Section 3.2)
 - State: "All methods produce single-channel grayscale images normalized to [0,1]"
 
@@ -109,9 +120,9 @@
 
 **Table 2b: Feature Overlap Diagnostics**
 
-| Dataset | DeepInsight OF/OP | TINTO OF/OP | IGTD | S-IGTD |
-|---------|-------------------|-------------|------|--------|
-| Breast Cancer | xmm/xmm% | xmm/xmm% | 0/0 | 0/0 |
+| Dataset | DeepInsight OF/OP | TINTO OF/OP | IGTD |
+|---------|-------------------|-------------|------|
+| Breast Cancer | xmm/xmm% | xmm/xmm% | 0/0 |
 | Dry Bean | xmm/xmm% | xmm/xmm% | 0/0 | 0/0 |
 | Adult Income | xmm/xmm% | xmm/xmm% | 0/0 | 0/0 |
 

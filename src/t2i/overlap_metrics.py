@@ -83,9 +83,10 @@ def compute_overlap(coordinates, image_size=None):
 def compute_overlap_all_methods(X_train, y_train, image_size=32):
     """Compute overlap diagnostics for all projection-based T2I methods.
 
-    IGTD and S-IGTD are collision-free by design (OF=0, OP=0).
-    Naive is deterministic (no overlap possible in pad-reshape).
-    Only DeepInsight and TINTO can have coordinate collisions.
+    IGTD is collision-free by design (OF=0, OP=0). Naive is
+deterministic (no overlap possible in pad-reshape). Only DeepInsight
+and TINTO can have coordinate collisions. s_igtd was dropped from the
+study 2026-09-03 (duplicated igtd; see paper-statement-guide PART 13i).
 
     Returns:
         dict mapping method_name -> overlap_metrics_dict
@@ -100,14 +101,7 @@ def compute_overlap_all_methods(X_train, y_train, image_size=32):
     # IGTD: collision-free by design
     results['igtd'] = {'OF': 0.0, 'OP': 0.0, 'n_features': X_train.shape[1],
                         'n_active_pixels': 0, 'n_overlapped_features': 0,
-                        'n_overlapped_pixels': 0}
-
-    # S-IGTD: collision-free by design
-    results['s_igtd'] = {'OF': 0.0, 'OP': 0.0, 'n_features': X_train.shape[1],
-                          'n_active_pixels': 0, 'n_overlapped_features': 0,
-                          'n_overlapped_pixels': 0}
-
-    # DeepInsight: can have overlaps
+                        'n_overlapped_pixels': 0}    # DeepInsight: can have overlaps
     try:
         from .deepinsight import DeepInsight
         di = DeepInsight(image_size=image_size)

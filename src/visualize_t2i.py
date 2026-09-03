@@ -46,11 +46,12 @@ def plot_comparison(dataset_name, image_size=32):
     samples = get_sample_images(X_train, y_train, n_per_class=2)
     total_samples = sum(len(v) for v in samples.values())
 
-    methods = ['naive', 'tinto', 'deepinsight', 'igtd', 's_igtd']
-    method_labels = ['Naive', 'TINTO', 'DeepInsight', 'IGTD', 'S-IGTD']
+    methods = ['naive', 'tinto', 'deepinsight', 'igtd']
+    method_labels = ['Naive', 'TINTO', 'DeepInsight', 'IGTD']
+    n_methods = len(methods)
 
-    # Create figure: 3 columns (methods) x total_samples rows
-    fig, axes = plt.subplots(total_samples, 5, figsize=(15, 2.5 * total_samples))
+    # Create figure: n_methods columns x total_samples rows
+    fig, axes = plt.subplots(total_samples, n_methods, figsize=(3.2 * n_methods, 2.5 * total_samples))
 
     for col_idx, (method, label) in enumerate(zip(methods, method_labels)):
         # Fit and transform
@@ -95,8 +96,8 @@ def plot_pixel_density_comparison():
     """Show how feature density varies across methods and datasets."""
     datasets = ['breast_cancer', 'dry_bean', 'adult_income']
     dataset_labels = ['Breast Cancer\n(30 feat)', 'Dry Bean\n(16 feat)', 'Adult Income\n(108 feat)']
-    methods = ['naive', 'tinto', 'deepinsight', 'igtd', 's_igtd']
-    method_labels = ['Naive', 'TINTO', 'DeepInsight', 'IGTD', 'S-IGTD']
+    methods = ['naive', 'tinto', 'deepinsight', 'igtd']
+    method_labels = ['Naive', 'TINTO', 'DeepInsight', 'IGTD']
     image_size = 32
 
     fig, axes = plt.subplots(3, 3, figsize=(12, 12))

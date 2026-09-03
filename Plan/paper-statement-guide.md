@@ -361,7 +361,12 @@ variance and ensure statistical significance of observed differences."
 - Table2Image+VIF beats XGBoost (0.879 vs 0.868 accuracy)
 - Your work: compare 5 methods on 3 datasets (smaller but focused)
 
-### 8b. S-IGTD Supervised Topology
+### 8b. S-IGTD Supervised Topology — NOT APPLICABLE (dropped 2026-09-03)
+
+Do not cite this as an evaluated method or claim a 5-8% S-IGTD
+advantage: the shipped wrapper duplicated IGTD (PART 13i). Keep the
+reference in Related Work only, as background on supervised topology
+methods that were NOT evaluated.
 - S-IGTD consistently outperforms unsupervised IGTD by 5-8%
 - Uses between-group correlation to place class-discriminative features locally
 - Reference: Zhang et al. (2024), supervised topology for multi-class problems
@@ -785,7 +790,7 @@ Decision: keep 0.1 everywhere for a uniform, comparable protocol
 (PART 1.3 / workflow design-decision 2). State this explicitly in
 the paper if reviewers ask why it is not disabled per dataset.
 
-### 13e. METRIC DEFINITION — DECISION REQUIRED
+### 13e. METRIC DEFINITION — RESOLVED: relabel honestly (kept binary-average)
 
 src/evaluate.py _compute_metrics uses
 avg = 'macro' if num_classes > 2 else 'binary' but always names the
@@ -804,15 +809,23 @@ and guide 2.3's reference "f1_score(..., average='macro')" is
 accurate only for multiclass. The current Colab run and any tables
 built from it inherit this behavior.
 
-Options:
-- (A, recommended) average='macro' always — matches every doc
-  claim and the imbalance rationale. Requires re-running the two
-  binary datasets (40 CNN cells + 6 baselines + ablations).
-- (B) Keep binary-average for 2-class data and relabel: report
-  "F1 (positive class)" for binary datasets, never "macro".
-  No re-run, but the headline metric then differs across rows.
+Options considered:
+- (A) average='macro' always — matches every doc claim and the
+  imbalance rationale, but requires re-running the two binary
+  datasets (40 CNN cells + 6 baselines + ablations).
+- (B) Keep binary-average for 2-class data and relabel.
 
-Decision pending (ask the user).
+RESOLVED 2026-09-03: Option B adopted — no re-run. Reporting rules:
+- dry_bean: values ARE macro-F1 (and macro-precision/recall).
+- breast_cancer (positive = benign, MAJORITY) and adult_income
+  (positive = >50K, MINORITY): report as "F1 (positive class)" —
+  never "macro". Column headings in every table/figure that mixes
+  datasets must state the per-row definition, or state once in the
+  methodology: "F1 is macro-averaged for the 7-class dry_bean and
+  computed on the positive class for the binary datasets (breast
+  cancer: benign; adult income: >50K)."
+The code key stays f1_macro (internal); do not rename keys — only
+labels and paper wording change.
 
 ### 13f. Fixed 32x32 canvas (supersedes PART 7a and workflow CP3 row 8)
 
@@ -885,8 +898,14 @@ Options:
   currently duplicates IGTD — not recommended (looks like an
   uncaught implementation bug in the paper).
 
-Decision pending (ask the user). PART 8b's S-IGTD literature claim
-must be removed or re-scoped whichever way this resolves.
+RESOLVED 2026-09-03: Option B adopted — s_igtd dropped from the
+study. The experimental grid is now 4 T2I methods (naive, tinto,
+deepinsight, igtd). Code updated: run_all T2I_METHODS, t2i/__init__
+METHODS + verify list, visualize_t2i + visualize method lists,
+overlap_metrics. s_igtd.py is kept on disk with an exclusion note
+for reference. Action in Colab: `rm results/*s_igtd*` (JSON + .pt)
+after the current run and before generating figures. PART 8b is
+marked not-applicable.
 
 ### 13j. Confirmed coverage (every remaining value has a recorded reason)
 

@@ -30,10 +30,10 @@ DATASET_LABELS = {
     'dry_bean': 'Dry Bean\n(16 features, 7 classes)',
     'adult_income': 'Adult Income\n(108 features, 2 classes)',
 }
-T2I_METHODS = ['naive', 'tinto', 'deepinsight', 'igtd', 's_igtd']
+T2I_METHODS = ['naive', 'tinto', 'deepinsight', 'igtd']  # s_igtd dropped (duplicates igtd, PART 13i)
 T2I_LABELS = {
     'naive': 'Naive', 'tinto': 'TINTO', 'deepinsight': 'DeepInsight',
-    'igtd': 'IGTD', 's_igtd': 'S-IGTD',
+    'igtd': 'IGTD',
 }
 CNN_ARCHS = ['shallow', 'resnet', 'resnet_scratch', 'vit']
 CNN_LABELS = {
@@ -536,7 +536,7 @@ def plot_density_vs_performance(results, output_dir='results/figures'):
 
     marker_map = {'shallow': 'o', 'resnet': 's', 'resnet_scratch': '^', 'vit': 'D'}
     color_map = {'naive': '#c44e52', 'tinto': '#8172b2', 'deepinsight': '#4c72b0',
-                 'igtd': '#55a868', 's_igtd': '#ccb974'}
+                 'igtd': '#55a868'}
 
     for r in cnn_results:
         # Estimate density from dataset and image_size
@@ -876,8 +876,7 @@ def plot_roc_curves(results, output_dir='results/figures'):
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
     method_colors = {'naive': '#c44e52', 'tinto': '#8172b2',
-                     'deepinsight': '#4c72b0', 'igtd': '#55a868',
-                     's_igtd': '#ccb974'}
+                     'deepinsight': '#4c72b0',                     'igtd': '#55a868'}
 
     for idx, dataset in enumerate(DATASETS):
         ax = axes[idx]
@@ -974,8 +973,7 @@ def plot_overlap_diagnostics(output_dir='results/figures'):
     x = np.arange(n_datasets)
     width = 0.8 / n_methods
     method_colors = {'naive': '#c44e52', 'tinto': '#8172b2',
-                     'deepinsight': '#4c72b0', 'igtd': '#55a868',
-                     's_igtd': '#ccb974'}
+                     'deepinsight': '#4c72b0',                     'igtd': '#55a868'}
 
     for j, method in enumerate(T2I_METHODS):
         of_vals = [all_overlap[ds].get(method, {}).get('of_percent', 0) for ds in DATASETS]
