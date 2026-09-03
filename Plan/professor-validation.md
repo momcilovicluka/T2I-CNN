@@ -389,3 +389,91 @@ pretraining-effect decomposition (9.1). Resolved 2026-09-03 by rephrasing
 every affected claim to a combined effect (no code change, no rerun).
 Everything else is an acceptable, documented limitation for a seminar and
 must simply be stated as such in the text.
+
+
+## 10. Second-pass professor audit (2026-09-03) — comparison fairness & runtime honesty
+
+Focused on what the FIRST pass did not cover: cross-family comparison
+fairness (CNN vs baselines) and the meaning of the runtime figure.
+
+### 10.1 FINDING — imbalance handling is asymmetric between CNNs and baselines (MEDIUM)
+Code evidence: src/baselines/rf.py RandomForestClassifier (no
+class_weight), src/baselines/xgboost_model.py XGBClassifier (no
+scale_pos_weight / sample weights), src/baselines/mlp.py MLPClassifier
+(no sample_weight). The CNN training loss uses inverse-frequency class
+weights (compute_class_weights, train.py). On adult_income (~3:1) and
+dry_bean (~6.8:1) a default-weighted RF/XGB sacrifices minority recall
+exactly where class-weighted CNNs are protected, tilting the
+CNN-vs-baseline comparison (ch4_baseline_comparison) in the CNN favor.
+These are not "untuned defaults" in a neutral sense: they are defaults
+WITHOUT the imbalance remedy applied to the other family. Fix (9-cell
+rerun only, seconds-to-minutes per cell): RF class_weight='balanced';
+XGB per-sample weights from sklearn compute_class_weight('balanced');
+MLP sample_weight likewise; keep seeds. Update the "baselines untuned"
+wording to "default hyperparameters with balanced class weighting" in
+guide PART 13b and the draft.
+
+### 10.2 FINDING — runtime figure ignores T2I generation time (MEDIUM/LOW)
+train_time_sec wraps ONLY train_model() (run_all.py step 8). The T2I
+fit/transform (steps 2-3), which for TINTO writes one file per sample,
+is excluded — yet the figure's purpose (ch4_runtime_comparison,
+"Training Time by T2I Method and Architecture") is to compare the cost
+of the T2I approaches. As recorded, a slow T2I transform would be
+invisible and the naive-vs-TINTO cost gap understated. Fix (additive,
+no invalidation): record t2i_time_sec and total_time_sec per CNN cell
+(steps 2-3 and the whole run_single_experiment) alongside
+train_time_sec; runtime figure uses total_time_sec with a fallback to
+train_time_sec only if the field is absent (old cells). Do this before
+the final suite runs so every cell carries the field.
+
+### 10.3 FINDING — confusion matrices lack class labels (LOW, presentational)
+ch4_confusion_matrices plots raw integer cells with no row/column tick
+labels; for dry_bean's 7 classes this is unreadable without the class
+legend. Fix in visualize.py: per-dataset class-name ticks (binary
+labels from the loaders; dry_bean 7 names). No rerun needed.
+
+### 10.4 VERIFIED CLEAN (no action)
+- CNN and baseline F1/precision/recall share ONE implementation
+  (_compute_metrics, average='macro' only for >2 classes else
+  'binary'), so cross-family bars compare the same quantity per
+  dataset; label semantics are annotated per dataset (PART 13e).
+- Baselines train on X_train ONLY and evaluate the SAME X_test rows as
+  CNNs; the scaler is fit on train and identical for both families;
+  val never enters baseline training (fix 9b, 6692c79).
+- No per-method hyperparameter tuning anywhere (CNNs and baselines
+  alike): fixed protocol is a stated comparability strength.
+- Atomic result writes and corrupt-file-aware resume verified.
+- visualize.BASELINES keys match run_all baseline cnn_arch values; the
+  baseline bar chart is correctly wired.
+
+### 10.5 Minor notes (document, no code)
+- adult_income: a category present only in test produces a
+  constant-zero training column; sklearn StandardScaler handles
+  zero-variance columns (scale->1) so this is benign; mention once.
+- MLP's internal early_stopping holds out its own 10% validation
+  inside X_train (validation_fraction=0.1): it sees ~90% of the CNN's
+  training rows. On adult this is ~3.2k rows; state it in the baseline
+  description or set validation_fraction to use a seeded split.
+- Final numbers must come from ONE machine/run (CPU-only; the earlier
+  GPU results were lost and CPU/GPU cells are not interchangeable in a
+  single table). State the environment (torch version, CPU) in the
+  reproducibility section; note that ResNet-18 ImageNet weights are
+  downloaded on first run (network needed to reproduce).
+- Dry-bean per-class F1 figure (ch4_per_class_f1_dry_bean) parses the
+  saved classification_report by class NAME; if dry_bean labels reach
+  sklearn as integers, the parser silently yields 0.0 bars. Verify
+  class-name presence in the report on the FIRST finished dry_bean
+  result before trusting that figure.
+
+### 10.6 Plan
+A. Baseline class weighting (10.1): edit rf.py / xgboost_model.py /
+   mlp.py; re-run only `python run_all.py --baselines` (9 fast cells);
+   update guide PART 13b + draft wording.
+B. Per-cell time fields (10.2): edit run_all.py (steps 2-3 timing,
+   whole-cell total); no rerun needed if added before the suite; if the
+   suite already started, cells finished without total_time_sec can
+   stay (runtime figure falls back to train_time_sec) or be deleted and
+   resumed.
+C. Confusion-matrix labels (10.3): visualize.py only.
+D. Verify the dry-bean per-class parser against the first real result
+   (10.5) before using figure 4.5 in the paper.
