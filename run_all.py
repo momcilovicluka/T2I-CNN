@@ -172,7 +172,7 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     }
 
     # 8. Train
-    print(f"  Training {cnn_arch}...")
+    print(f"  Training {cnn_arch}...", flush=True)
     start_time = time.time()
     model, history = train_model(model, train_loader, val_loader, train_config)
     train_time = time.time() - start_time
