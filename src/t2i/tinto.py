@@ -29,6 +29,8 @@ class TINTO:
         self.model = None
         self._temp_dir = None
         self._coordinates = None  # pixel coordinate map after fit()
+        self._pix_min = None      # train-derived [0,1] scale (set on first transform)
+        self._pix_max = None
 
     def fit(self, X_train, y_train=None):
         """Learn feature-to-pixel coordinate mapping from training data."""
@@ -91,7 +93,18 @@ class TINTO:
         shutil.rmtree(self._temp_dir, ignore_errors=True)
         self._temp_dir = None
 
-        # Clamp to [0, 1] for out-of-distribution test samples
+        # FIX (audit 2026-09-03): TINTOlib's TINTO does NOT scale features
+        # to [0,1] — blurring compresses peaks (breast cancer max=0.30).
+        # After ImageNet normalization (mean 0.485), ALL pixels go negative
+        # and pretrained ReLU collapses. Normalize to [0,1] using stats
+        # cached from the FIRST transform call (training split — run_all.py
+        # always transforms train before val/test), then clip.
+        if self._pix_min is None:
+            self._pix_min = float(images.min())
+            self._pix_max = float(images.max())
+        rng = self._pix_max - self._pix_min
+        if rng > 1e-8:
+            images = (images - self._pix_min) / rng
         images = np.clip(images, 0, 1)
 
         # Add channel dim: (N, 1, H, W)

@@ -27,6 +27,8 @@ class IGTD:
         self.model = None
         self._temp_dir = None
         self._coordinates = None
+        self._pix_min = None      # train-derived [0,1] scale (set on first transform)
+        self._pix_max = None
 
     def fit(self, X_train, y_train=None):
         """Learn feature-to-pixel coordinate mapping from training data."""
@@ -92,7 +94,15 @@ class IGTD:
         # with DeepInsight which outputs [0, 1] via MinMaxScaler.
         images = images / IGTD_RAW_MAX
 
-        # Clamp for out-of-distribution test samples
+        # Uniform [0,1] normalization using stats cached from the FIRST
+        # transform call (training split). Consistent across methods so
+        # pretrained models receive comparable inputs. Clips OOD values.
+        if self._pix_min is None:
+            self._pix_min = float(images.min())
+            self._pix_max = float(images.max())
+        rng = self._pix_max - self._pix_min
+        if rng > 1e-8:
+            images = (images - self._pix_min) / rng
         images = np.clip(images, 0, 1)
 
         # Add channel dim: (N, 1, H, W)
