@@ -62,6 +62,28 @@ def load_results(results_dir='results'):
     return results
 
 
+def _load_t2i_pixel_range(results_dir, dataset, t2i_method, cnn_arch):
+    """Load the train-derived pixel scale recorded by run_all.py.
+
+    run_all.py saves t2i_pixel_range=[min, max] for TINTO experiments so
+    Grad-CAM figures can reproduce the exact scaling the CNN was trained on
+    (TINTO caches [0,1] stats on its first transform call — which must be
+    the training split). Returns None if absent.
+    """
+    json_file = Path(results_dir) / f"{dataset}_{t2i_method}_{cnn_arch}.json"
+    if not json_file.exists():
+        return None
+    try:
+        with open(json_file) as f:
+            data = json.load(f)
+        rng = data.get('t2i_pixel_range')
+        if rng is not None and len(rng) == 2:
+            return (float(rng[0]), float(rng[1]))
+    except Exception:
+        pass
+    return None
+
+
 def load_ablation_results(results_dir='results', prefix='ablation_'):
     """Load ablation results from JSON files."""
     results = []
@@ -627,6 +649,21 @@ def plot_gradcam_grid(results_dir='results', output_dir='results/figures', n_sam
             # Fit T2I on train
             t2i = T2ITransformer(method=method, image_size=32)
             t2i.fit(X_train, y_train)
+
+            # Restore TINTO's train-derived pixel scale recorded by run_all.py.
+            # FIX (audit): TINTO caches [0,1] scaling stats on its FIRST
+            # transform call. run_all.py trained on train-derived scaling and
+            # saved it in the results JSON. Transforming test samples first
+            # would cache test-derived stats (max 0.23 vs 0.30 for breast
+            # cancer) and display differently-scaled images than the CNN saw.
+            t2i_pix_range = _load_t2i_pixel_range(results_dir, dataset, method, arch)
+            if t2i_pix_range is not None:
+                t2i.transformer._pix_min = float(t2i_pix_range[0])
+                t2i.transformer._pix_max = float(t2i_pix_range[1])
+            elif getattr(t2i.transformer, '_pix_min', None) is None and hasattr(t2i.transformer, '_pix_min'):
+                # Legacy results lack the field: seed the cache exactly the way
+                # run_all.py did (full training transform) before test samples.
+                t2i.transform(X_train, y_train)
 
             # Transform test samples
             sample_X = X_test[sample_indices]

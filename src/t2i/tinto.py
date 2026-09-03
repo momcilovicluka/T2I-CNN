@@ -33,7 +33,13 @@ class TINTO:
         self._pix_max = None
 
     def fit(self, X_train, y_train=None):
-        """Learn feature-to-pixel coordinate mapping from training data."""
+        """Learn feature-to-pixel coordinate mapping from training data.
+
+        Invalidates any cached pixel scale from a previous fit so a refit on
+        new data never reuses stale train-derived statistics.
+        """
+        self._pix_min = None
+        self._pix_max = None
         from TINTOlib.tinto import TINTO as TINTO_TINTO
         import pandas as pd
 

@@ -196,6 +196,13 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     metrics['dataset'] = dataset
     metrics['t2i_method'] = t2i_method
     metrics['cnn_arch'] = cnn_arch
+    # Persist train-derived pixel scale for TINTO (used by Grad-CAM figures
+    # so displayed images match the scale the CNN was trained on).
+    if getattr(t2i.transformer, '_pix_min', None) is not None:
+        metrics['t2i_pixel_range'] = [
+            float(t2i.transformer._pix_min),
+            float(t2i.transformer._pix_max),
+        ]
     metrics['train_samples'] = len(X_train)
     metrics['test_samples'] = len(X_test)
     metrics['image_size'] = image_size
