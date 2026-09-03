@@ -97,19 +97,26 @@ class ProgressTracker:
         return f"{h}h {m}m"
 
 def create_cnn_model(arch, num_classes):
-    """Initialize a CNN model by architecture name."""
+    """Initialize a CNN model by architecture name.
+
+    IMPORTANT: Pretrained models must use input_channels=3 — they receive
+    ImageNet-normalized RGB input (imagenet_normalize repeats the grayscale
+    channel to 3). This keeps the original 3-channel conv1 with pretrained
+    weights instead of replacing it with a 1-channel averaged version.
+    From-scratch models use input_channels=1 (raw grayscale images).
+    """
     if arch == 'shallow':
         from src.models.shallow_cnn import ShallowCNN
         return ShallowCNN(num_classes=num_classes)
     elif arch == 'resnet':
         from src.models.resnet_wrapper import ResNetWrapper
-        return ResNetWrapper(num_classes=num_classes, pretrained=True)
+        return ResNetWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
     elif arch == 'resnet_scratch':
         from src.models.resnet_wrapper import ResNetWrapper
-        return ResNetWrapper(num_classes=num_classes, pretrained=False)
+        return ResNetWrapper(num_classes=num_classes, pretrained=False, input_channels=1)
     elif arch == 'vit':
         from src.models.vit_wrapper import ViTWrapper
-        return ViTWrapper(num_classes=num_classes, pretrained=True)
+        return ViTWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
     else:
         raise ValueError(f"Unknown architecture: {arch}")
 
@@ -239,10 +246,14 @@ def run_baseline(dataset, model_type, output_dir='results'):
     num_classes = config['num_classes']
 
     # 1. Load dataset (raw features, no T2I)
+    # IMPORTANT: Baselines train on X_train ONLY (same as CNNs) for fairness.
+    # Previously they trained on train+val (455 vs 398 samples) which gave
+    # baselines ~14% more data — biased against CNNs. Val is used only for
+    # early stopping by CNNs, so it must not be training data for baselines.
     print(f"  Loading {dataset}...")
     data = preprocess_dataset(dataset)
-    X_train = np.vstack([data['X_train'], data['X_val']])
-    y_train = np.concatenate([data['y_train'], data['y_val']])
+    X_train = data['X_train']
+    y_train = data['y_train']
     X_test, y_test = data['X_test'], data['y_test']
 
     # 2. Train and evaluate

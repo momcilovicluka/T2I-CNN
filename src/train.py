@@ -335,18 +335,21 @@ def cross_validate(X, y, model_fn, t2i_method, image_size=32,
         train_imgs = t2i.transform(X_train, y_train)
         test_imgs = t2i.transform(X_test, y_test)
 
+        # Split a validation subset from the TRAIN fold only (no test leakage)
+        # Fix: previously the test fold was used for early stopping, which
+        # leaks test information into model selection. Now val comes from train.
+        n_val = max(1, int(len(X_train) * 0.1))
+        val_idx = np.random.RandomState(seed + fold).choice(
+            len(X_train), size=n_val, replace=False
+        )
+        train_mask = np.ones(len(X_train), dtype=bool)
+        train_mask[val_idx] = False
+
         # Train model
         model = model_fn()
         train_loader, val_loader = prepare_loaders(
-            train_imgs.numpy(), y_train,
-            test_imgs.numpy(), y_test,
-            batch_size=config.get('batch_size', 32)
-        )
-
-        # Use a small validation split from train for early stopping
-        n_val = int(len(X_train) * 0.1)
-        val_loader_final = DataLoader(
-            TensorDataset(test_imgs[:n_val], torch.tensor(y_test[:n_val]).long()),
+            train_imgs.numpy()[train_mask], y_train[train_mask],
+            train_imgs.numpy()[val_idx], y_train[val_idx],
             batch_size=config.get('batch_size', 32)
         )
 

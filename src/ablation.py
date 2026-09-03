@@ -95,7 +95,7 @@ def run_pixel_shuffling_ablation(dataset, t2i_method, cnn_arch, output_dir='resu
     class_weights = compute_class_weights(y_train)
     config_train = {
         'epochs': 50, 'lr': 1e-3, 'weight_decay': 1e-4,
-        'early_stopping_patience': 10, 'label_smoothing': 0.1,
+        'early_stopping_patience': 15, 'label_smoothing': 0.1,
         'class_weights': class_weights,
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
     }
@@ -230,7 +230,7 @@ def run_feature_ordering_ablation(dataset, t2i_method, cnn_arch, output_dir='res
         class_weights = compute_class_weights(y_train)
         config_train = {
             'epochs': 50, 'lr': 1e-3, 'weight_decay': 1e-4,
-            'early_stopping_patience': 10, 'label_smoothing': 0.1,
+            'early_stopping_patience': 15, 'label_smoothing': 0.1,
             'class_weights': class_weights,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
         }
@@ -323,7 +323,8 @@ def run_lpft_ablation(dataset, t2i_method, output_dir='results'):
     print("  Training: Direct Fine-Tuning...")
     set_global_seed(42)
     train_loader, val_loader = prepare_loaders(train_imgs, y_train, val_imgs, y_val)
-    model_direct = ResNetWrapper(num_classes=num_classes, pretrained=True)
+    # pretrained=True needs input_channels=3 (imagenet_normalize produces RGB)
+    model_direct = ResNetWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
     direct_config = {**base_config, 'lr': 1e-4}
     model_direct, hist_direct = train_model(model_direct, train_loader, val_loader, direct_config)
 
@@ -344,7 +345,7 @@ def run_lpft_ablation(dataset, t2i_method, output_dir='results'):
     print("  Training: LP-FT (Linear Probing + Fine-Tuning)...")
     set_global_seed(42)
     train_loader, val_loader = prepare_loaders(train_imgs, y_train, val_imgs, y_val)
-    model_lpft = ResNetWrapper(num_classes=num_classes, pretrained=True)
+    model_lpft = ResNetWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
     lpft_config = {**base_config, 'lr': 1e-3, 'lr_ft': 1e-4}
     model_lpft, hist_lpft = train_lp_ft(
         model_lpft, train_loader, val_loader, lpft_config,
