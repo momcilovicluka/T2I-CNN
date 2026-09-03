@@ -255,3 +255,127 @@ main limitations (single split, no cross-validation, confounded
 naive baseline) should be acknowledged in the paper but do not
 invalidate the work. The implementation is clean and the comparison
 is fair.
+
+
+## 9. Red-team review (2026-09-03) — pre-results audit of the final protocol
+
+Auditor stance: ML professor reading the FINAL code and the claims the draft
+will make, before the 36-cell run is used for results. Supersedes section 8's
+verdict where they conflict (section 8 predates the ViT removal, the fixed
+TINTO/naive pipelines and the resnet_scratch input design).
+
+### 9.1 FINDING 1 — CRITICAL: the resnet vs resnet_scratch comparison is confounded
+Evidence (code):
+- run_all.py create_cnn_model(): resnet -> ResNetWrapper(pretrained=True,
+  input_channels=3); resnet_scratch -> ResNetWrapper(pretrained=False,
+  input_channels=1).
+- train.py train_model()/evaluate.py evaluate_model(): ImageNet normalization
+  applied iff model.pretrained is True. So resnet gets 3-channel
+  ImageNet-normalized RGB input; resnet_scratch gets raw 1-channel [0,1]
+  grayscale. The wrapper replaces conv1 for input_channels=1 (random init).
+Why a professor would object: RQ2 ("does ImageNet transfer help?") requires
+the pretrained and from-scratch model to differ ONLY in weight initialization.
+Here they also differ in input channels AND normalization statistics, so any
+delta mixes "pretrained vs random init" with "RGB+norm vs gray-raw". The draft
+currently claims otherwise (§3.3: "Ova dva režima razdvajaju efekat kapaciteta
+od efekta pretreniranosti") and Slika 6.1 caption says the archs "razlikuju se
+samo po pretreniranosti" — both statements are false under the current code.
+Integrity impact: the headline RQ2 delta figure would not support the clean
+"transfer learning effect" claim it is captioned with. Shallow/resnet rows in
+the heatmap and all other comparisons remain valid; only pretrained-vs-scratch
+inference is affected.
+Fix plan (recommended): train resnet_scratch on the SAME input pipeline —
+input_channels=3 + ImageNet normalization — so the two ResNet-18s differ only
+in weight init. Concretely:
+  1. run_all.py create_cnn_model(): resnet_scratch -> input_channels=3
+     (pretrained=False keeps random init).
+  2. train.py / evaluate.py: trigger ImageNet normalization from a channel
+     flag (e.g., model.imagenet_input = input_channels==3) instead of
+     model.pretrained, so normalization applies to resnet_scratch too but NOT
+     to shallow (1-channel local model; no matched-arch claim).
+  3. resnet_wrapper.py: set the flag; keep conv1 replacement only for the 1ch
+     case (shallow-style), never for the 3ch scratch.
+  4. Rerun scope: delete only the 12 resnet_scratch result JSONs + model.pt
+     files; resume logic re-runs exactly those cells (deterministic seed 42 —
+     untouched shallow/resnet/baseline cells reproduce identically and are
+     correctly skipped as done).
+  5. Docs: create_cnn_model docstring, guide PART 4.2/9a wording, workflow
+     bug-table row 2, draft §3.3/§3.4/§5.7/listing 5.6.
+  Alternative (weaker, not recommended): keep 1-channel scratch and rephrase
+  every claim to "pretrained RGB+ImageNet ResNet vs ResNet from scratch on
+  single-channel images" — a professor would still press for the controlled
+  version, and the delta figure loses its core meaning.
+
+### 9.2 FINDING 2 — MEDIUM (already documented): one split, no variance
+Single 70/10/20 split, one seed; all methods share it (fair), but no
+mean±std, so small deltas cannot be distinguished from noise. Draft has this
+as a limitation (PART 1.1, §7). Acceptable for a seminar IF claims are phrased
+per-run, not as general superiority. Optional hardening (post-run, cheap):
+3-5 repeats of the best-vs-runner-up cell only with different seeds, report
+mean±std as supporting evidence.
+
+### 9.3 FINDING 3 — MEDIUM (documented): untuned baselines
+RF/XGBoost/MLP use sklearn/xgboost defaults; CNN hyperparameters are also
+fixed across methods (never tuned per dataset). The comparison is therefore
+"reference CNN protocol vs reference tabular methods" — fair as a reference
+benchmark, but the paper must NOT claim CNNs outperform *tuned* tabular
+models. Professor's likely probe: "would XGBoost with 30 random-search iters
+beat your best T2I-CNN?" Optional post-run: light tuning of the 3 baselines
+per dataset (~minutes each) and re-report as the honest bar.
+
+### 9.4 FINDING 4 — LOW/MEDIUM: F1 label semantics asymmetry
+f1_macro key stores scikit *binary* F1 (positive class) for breast_cancer and
+adult_income, macro-F1 for dry_bean. Positive class is the MAJORITY benign
+(357/212) for breast and the MINORITY >50K for adult. Documented honestly
+(PART 13e, F1_LABEL in visualize.py), but a professor will note the binary
+"positive-class F1" is asymmetric across datasets and favors breast numbers.
+Fix (no rerun needed): report, alongside the existing metric, binary macro-F1
+and balanced accuracy derived from the SAVED classification_report /
+confusion_matrix (evaluate_model stores both per run); state explicitly in
+tables that breast F1 = F1(benign).
+
+### 9.5 FINDING 5 — LOW: one-hot encoder fitted before the split
+get_dummies is applied to the FULL dataset in the loaders; preprocess() splits
+afterwards. Category vocabulary is therefore informed by test rows. Impact is
+near-zero here (all adult categories occur in train after the '?' fix; breast
+and dry_bean have no categoricals) and it is a common practice, but a strict
+professor may flag it. If the suite is ever re-run anyway, encode on
+train+val and apply the same columns to test; otherwise record it as a
+limitation note.
+
+### 9.6 LOW/process notes (no action expected)
+- ResNet-18 weights download on first run (torchvision/HF); document that a
+  network fetch is part of setup for reproducibility.
+- All CNN hyperparameters are protocol-fixed (never per-method tuned) — this
+  is a strength for comparability and a stated limitation for optimality.
+- ViT: excluded from the main grid (documented 2026-09-03); re-addable via
+  --archs flag. Any future ViT table must not be compared to the 36-cell grid
+  numbers directly.
+- Code key name f1_macro for a binary positive-class value is confusing on
+  inspection; the JSON consumers (visualize.py F1_LABEL, guide PART 13e) label
+  it honestly, so no code change required.
+
+### 9.7 Expected-results watchlist (what to check the moment the run finishes)
+1. If resnet beats resnet_scratch by a large margin BEFORE Finding 1 is fixed,
+   the margin must NOT be attributed to pretraining (confound) — re-run the 12
+   scratch cells after the fix.
+2. Adult income: watch for any CNN pinned near the ~75/25 prior (acc ≈ 0.75
+   with F1 near 0) — a symptom, not a result; class weights + report cards
+   should prevent it, but verify each cell's final val loss is below ~0.69
+   (log(2) for binary) for the binary sets.
+3. Dry bean 7-class: check per-class F1 spread for classes collapsed by the
+   CNN; confusion matrix should confirm whether minority classes are merely
+   dropped or genuinely separable.
+4. Training time sanity: adult resnet/resnet_scratch cells are the long pole
+   (est. ~15-20 min each CPU); anything wildly outside 5-60x the shallow cell
+   on the same dataset warrants a look at the log.
+5. If the fixed transfer delta is NEGATIVE for most cells, that is a real,
+   interesting finding ("ImageNet features do not transfer to synthetic T2I")
+   — report it as such rather than as a failure; do not cherry-pick cells.
+
+### 9.8 Verdict (supersedes section 8)
+Methodology is sound and the fixes documented in PART 15 made the pipelines
+fair. One claim currently exceeds what the code supports: the clean
+pretraining-effect decomposition (9.1). Fix that one confound before the
+36-cell run is treated as final; everything else is an acceptable, documented
+limitation for a seminar and must simply be stated as such in the text.
