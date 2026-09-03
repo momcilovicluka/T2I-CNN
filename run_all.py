@@ -165,7 +165,7 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
         'epochs': 50,
         'lr': 1e-3,
         'weight_decay': 1e-4,
-        'early_stopping_patience': 10,
+        'early_stopping_patience': 15,
         'label_smoothing': 0.1,
         'class_weights': class_weights,
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',

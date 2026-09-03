@@ -69,7 +69,7 @@ def train_model(model, train_loader, val_loader, config):
             - epochs (int, default 50)
             - lr (float, default 1e-3)
             - weight_decay (float, default 1e-4)
-            - early_stopping_patience (int, default 10)
+            - early_stopping_patience (int, default 15)
             - device (str, 'cuda' or 'cpu')
             - class_weights (torch.Tensor, optional) — for imbalanced datasets
 
@@ -81,7 +81,7 @@ def train_model(model, train_loader, val_loader, config):
     epochs = config.get('epochs', 50)
     lr = config.get('lr', 1e-3)
     weight_decay = config.get('weight_decay', 1e-4)
-    patience = config.get('early_stopping_patience', 10)
+    patience = config.get('early_stopping_patience', 15)
 
     model = model.to(device)
 
