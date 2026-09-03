@@ -130,8 +130,10 @@ random seeds. Report mean ± std. This is standard practice.
 - `torch.backends.cudnn.benchmark = False` disables auto-tuner
 
 ### ⚠️ CONCERN: TINTOlib Internal Randomness
-TINTOlib uses `random_seed=42`, but t-SNE and iterative optimization
-may have non-deterministic components across different hardware.
+TINTOlib uses `random_seed=42` (and our wrappers pass it explicitly).
+DeepInsight/TINTO projections use PCA (deterministic), but IGTD's
+iterative swap optimization may still have non-deterministic
+components across different hardware (guide PART 15c).
 
 **Professor would ask:** "Are results identical on different machines?"
 

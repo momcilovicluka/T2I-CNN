@@ -54,10 +54,10 @@ def _load_tinto_images(temp_dir, N, y):
 def compute_optimal_image_size(n_features, min_size=8, max_size=64):
     """Compute image size based on feature count.
 
-    WHY (Concern 8 — 32x32 too small for 108 features):
-    Feature density = n_features / image_size^2. With 108 features on
-    32x32 = 1024 pixels, density = 10.5%. CNN kernels (3x3) see mostly
-    zeros. Increasing to ~17x17 for 108 features gives 37% density,
+    WHY (Concern 8 — 32x32 too small for 104 features):
+    Feature density = n_features / image_size^2. With 104 features on
+    32x32 = 1024 pixels, density = 10.2%. CNN kernels (3x3) see mostly
+    zeros. Increasing to ~17x17 for 104 features gives 36% density,
     making convolution meaningful.
 
     Strategy: Find the smallest square image where feature density is

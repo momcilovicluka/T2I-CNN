@@ -83,7 +83,7 @@ def plot_comparison(dataset_name, image_size=32):
     title_map = {
         'breast_cancer': 'Breast Cancer Wisconsin (30 features)',
         'dry_bean': 'Dry Bean (16 features)',
-        'adult_income': 'Adult Income (108 features)',
+        'adult_income': 'Adult Income (104 features)',
     }
     fig.suptitle(f'{title_map.get(dataset_name, dataset_name)} — {image_size}×{image_size}',
                  fontsize=16, fontweight='bold', y=1.02)

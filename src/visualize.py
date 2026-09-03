@@ -28,7 +28,7 @@ DATASETS = ['breast_cancer', 'dry_bean', 'adult_income']
 DATASET_LABELS = {
     'breast_cancer': 'Breast Cancer\n(30 features, 2 classes)',
     'dry_bean': 'Dry Bean\n(16 features, 7 classes)',
-    'adult_income': 'Adult Income\n(108 features, 2 classes)',
+    'adult_income': 'Adult Income\n(104 features, 2 classes)',
 }
 T2I_METHODS = ['naive', 'tinto', 'deepinsight', 'igtd']  # s_igtd dropped (duplicates igtd, PART 13i)
 

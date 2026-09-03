@@ -105,7 +105,8 @@ def load_adult_income():
     """Load Adult Income dataset.
 
     Downloads from UCI if not present locally.
-    ~48,000 samples, 14 features (6 categorical + 8 numerical), binary.
+    ~45,000 samples after removing rows with '?' missing values,
+    14 raw features (8 categorical + 6 numerical), binary.
 
     Returns:
         X: np.ndarray - one-hot encoded features
@@ -126,12 +127,17 @@ def load_adult_income():
     ]
 
     # Load train set (no header)
+    # FIX (audit 2026-09-03): na_values must be '?' NOT ' ?'. With
+    # skipinitialspace=True pandas strips the space before matching, so
+    # ' ?' never matched and all rows with '?' were kept as literal '?'
+    # one-hot categories instead of being dropped (dropna was a no-op;
+    # load returned 48,842 rows incl. ~3,620 missing-value rows).
     df_train = pd.read_csv(train_path, header=None, names=columns,
-                           na_values=" ?", skipinitialspace=True)
+                           na_values="?", skipinitialspace=True)
 
     # Load test set (has trailing period in labels, no header)
     df_test = pd.read_csv(test_path, header=None, names=columns,
-                          na_values=" ?", skipinitialspace=True)
+                          na_values="?", skipinitialspace=True)
 
     # Drop rows with missing values
     df_train = df_train.dropna()

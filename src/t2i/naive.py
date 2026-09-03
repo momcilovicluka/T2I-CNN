@@ -63,13 +63,21 @@ class NaiveReshape:
                 img = Image.fromarray(images[i])
                 img = img.resize((self.image_size, self.image_size), Image.BICUBIC)
                 resized[i] = np.array(img, dtype=np.float32)
-            # Clip immediately after bicubic to prevent ringing overshoot
-            # (bicubic can produce values outside input range on sharp transitions)
-            images = np.clip(resized, images.min(), images.max())
+            # FIX (audit 2026-09-03): no intermediate clip here. The old
+            # np.clip(resized, images.min(), images.max()) bounded bicubic
+            # ringing by the CURRENT SPLIT's min/max, so train vs val/test
+            # pixels were produced by different functions (per-split bounds)
+            # — the same Bug #1 family the train-derived normalization fixes.
+            # Ringing is now bounded by the train-derived affine + final
+            # clip to [0,1] below, which is IDENTICAL for every split.
+            images = resized
 
         # Normalize using training statistics (no data leakage).
         # FIX (Bug #1): Previously used images.max() per-call, which gave
         # different scales on train/val/test. Now uses fixed train min/max.
+        # This affine + the [0,1] clip below is the ONLY value transform:
+        # identical for every split, including bicubic ringing (values
+        # outside [train_min, train_max] map to <0 or >1 and are clipped).
         rng = self._train_max - self._train_min
         if rng > 0:
             images = (images - self._train_min) / rng

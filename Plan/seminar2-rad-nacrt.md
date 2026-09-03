@@ -287,7 +287,7 @@ pretrenirani modeli su kolabirali na predviđanje jedne klase; listing 5.6).
 
 Funkcija gubitka je unakrsna entropija sa:
 - **klasnim težinama** (inverzna učestanost klasa, sklearn `compute_class_weight`
-  sa `'balanced'`) — kompenzacija disbalansa (Dry Bean ~6,8:1, Adult ~3,2:1);
+  sa `'balanced'`) — kompenzacija disbalansa (Dry Bean ~6,8:1, Adult ~3,0:1);
 - **label smoothing** $\varepsilon = 0{,}1$ — omekšavanje ciljnih raspodela radi
   manje samouverenih predikcija i bolje generalizacije; primenjeno uniformno na
   svim skupovima radi uporedivosti protokola.
@@ -359,7 +359,7 @@ atributa, izbalansiran i disbalansiran raspored klasa (Tabela 4.1).
 |---|---|---|---|---|
 | Breast Cancer Wisconsin [7] | 569 | 30 | binarna | ~63:37 (benigni:maligni); svi numerički |
 | Dry Bean [8] | ~13.611 | 16 | 7 klasa | najveći disbalans ~6,8:1; svi numerički |
-| Adult Income [9] | ~48.842 | ~108 (one-hot) | binarna | 8 kategoričkih + 6 numeričkih; ~76:24 |
+| Adult Income [9] | ~45.222 | ~104 (one-hot) | binarna | 8 kategoričkih + 6 numeričkih; ~75:25; uklonjeni redovi sa „?“ |
 
 Priprema je zajednička za sve metode i modele:
 
@@ -661,13 +661,15 @@ def transform(self, X, y=None):
     images = padded.reshape(X.shape[0], self.grid_size, self.grid_size)
     if self.grid_size != self.image_size:        # npr. 6x6 -> 32x32
         # BIKUBIČNO umesto najbližeg suseda: glatkiji prelazi; jezgro 4x4
-        # računa težinske proseke, pa vrednosti mogu preći ulazni opseg —
-        # zato se odmah vrši isecanje (clip)
+        # računa težinske proseke pa vrednosti mogu preći ulazni opseg —
+        # zato se isecanje obavlja TEK posle normalizacije, na [0,1]
+        # (starija verzija je isecala po opsegu TEKUĆEG podskupa — različita
+        # transformacija za trening/validaciju/test; ispravljeno, videti 5.4)
         resized = np.stack([np.asarray(
             Image.fromarray(images[i]).resize(
                 (self.image_size, self.image_size), Image.BICUBIC))
             for i in range(len(images))], axis=0)
-        images = np.clip(resized, images.min(), images.max())
+        images = resized
     # min-max sa TRENINGA (fiksno), ne po podskupu; zatim isecanje na [0,1]
     images = (images - self._train_min) / (self._train_max - self._train_min)
     return torch.tensor(np.clip(images, 0, 1)).unsqueeze(1).float()
@@ -678,12 +680,19 @@ Listing 5.3. Naivno preslikavanje (`src/t2i/naive.py`, skraćeno).
 interpolacija koristi okolinu $4\times4$ i daje glatke prelaze između vrednosti
 atributa i dopunjene zone; najbliži sused pravio bi blokovske artefakte. Pošto
 kubni polinom može da „premaši“ opseg ulaznih vrednosti (ringing efekat),
-odmah nakon skaliranja vrši se isecanje. (2) *Normalizacija.* U ranijoj verziji
-koda min/max su računati *po pozivu* `transform` — za trening, validaciju i
-test dobijali su se različiti opsezi (npr. test maksimum 1,25 umesto 1,0), što
-je menjalo raspodelu piksela po podskupu i predstavljalo oblik curenja
-informacija. Ispravka: statistike se računaju jednom, u `fit()`, na treningu,
-i primenjuju na sve podskupove.
+takve vrednosti se odsecaju — ali **tek posle** normalizacije, konstantnim
+isecanjem na $[0,1]$ koje važi jednako za sve podskupove. Ranija verzija je
+isecala odmah po skaliranju, po opsegu *tekućeg* podskupa
+(`np.clip(resized, images.min(), images.max())`): pošto se opsezi
+validacije/testa razlikuju od trening opsega, ista struktura slike dobijala je
+različite vrednosti u zavisnosti od toga u kom se podskupu nalazi — isti
+oblik greške kao u tački (2), pa je uklonjen tokom revizije.
+(2) *Normalizacija.* U ranijoj verziji koda min/max su računati *po pozivu*
+`transform` — za trening, validaciju i test dobijali su se različiti opsezi
+(npr. test maksimum 1,25 umesto 1,0), što je menjalo raspodelu piksela po
+podskupu i predstavljalo oblik curenja informacija. Ispravka: statistike se
+računaju jednom, u `fit()`, na treningu, i primenjuju na sve podskupove —
+transformacija je tada **ista funkcija** za trening, validaciju i test.
 
 ## 5.5 TINTOlib integracija i poravnanje primera sa slikama
 
@@ -981,7 +990,7 @@ podešavanje — bez nje transfer učenje na T2I slikama jednostavno ne radi.
 
 ### 6.1.3 Adult Income
 
-- Binarni disbalansiran skup (76:24); pozitivna klasa `>50K`.
+- Binarni disbalansiran skup (~75:25); pozitivna klasa `>50K`.
 - [TBD].
 
 ## 6.2 Poređenje sa baselajnima

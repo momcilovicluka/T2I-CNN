@@ -138,7 +138,7 @@ for name in ['breast_cancer', 'dry_bean', 'adult_income']:
 
 ### Step 3b: DeepInsight (via TINTOlib)
 - Use `tintolib` library: `pip install tintolib`
-- Pipeline: t-SNE on feature correlations → map features to 2D pixel coordinates
+- Pipeline: PCA on features as points (TINTOlib default projection) → map features to 2D pixel coordinates
 - Handle edge cases: features that collapse to same point
 - Output: sparse-to-dense pixel intensity images
 - **Key parameter:** image_size (try 32×32, 64×64)
@@ -571,7 +571,7 @@ python src/visualize.py  # Generate all figures
 
 ### Checkpoint 3: T2I Methods ✓
 - naive.py: custom pad+reshape+bicubic resize
-- deepinsight.py: TINTOlib wrapper (t-SNE manifold)
+- deepinsight.py: TINTOlib wrapper (PCA projection — TINTOlib default; guide PART 15c)
 - igtd.py: TINTOlib wrapper (rank-based permutation)
 - __init__.py: T2ITransformer unified interface + _load_tinto_images helper
 - Commit: 079a363
@@ -591,6 +591,9 @@ python src/visualize.py  # Generate all figures
 | 8 | 32x32 sparse for 108 features | Resolved: fixed 32x32 kept (resolution diagnostic showed larger worse) — guide PART 13f | — |
 | 9 | ResNet/ViT need 224x224 | PLANNED for CP4 | — |
 | 10 | Small data overfitting | Weight decay + early stop + label smoothing | 79e79c9, 8b556ad |
+| 11 | Adult "?" rows never dropped (na_values=' ?' + skipinitialspace mismatch → 48,842 rows/108 feats incl. '?' categories) | na_values='?' → canonical 45,222 rows / 104 feats (guide PART 15a) | — |
+| 12 | Naive per-batch intermediate clip (split-dependent bounds = residual Bug #1) | Removed; only train-derived affine + clip(0,1) remains (guide PART 15b) | — |
+| 13 | DeepInsight/TINTO docstrings said t-SNE (code uses TINTOlib default PCA); adult docstring 6/8 swap | Docstrings corrected (guide PART 15c) | — |
 
 ### Literature-Based Improvements ✓
 - Bicubic interpolation (concern 9): naive.py uses Image.BICUBIC
@@ -676,7 +679,7 @@ python src/visualize.py  # Generate all figures
 | Breast Cancer | naive | shallow | 398 train, 30 features |
 | Breast Cancer | naive | resnet | Transfer learning |
 | Breast Cancer | naive | vit | Transfer learning |
-| Breast Cancer | deepinsight | shallow | t-SNE mapping |
+| Breast Cancer | deepinsight | shallow | PCA mapping |
 | Breast Cancer | deepinsight | resnet | Transfer learning |
 | Breast Cancer | deepinsight | vit | Transfer learning |
 | Breast Cancer | igtd | shallow | Rank-based mapping |
@@ -685,7 +688,7 @@ python src/visualize.py  # Generate all figures
 | Dry Bean | naive | shallow | 9527 train, 16 features |
 | Dry Bean | naive | resnet | Transfer learning |
 | Dry Bean | naive | vit | Transfer learning |
-| Dry Bean | deepinsight | shallow | t-SNE mapping |
+| Dry Bean | deepinsight | shallow | PCA mapping |
 | Dry Bean | deepinsight | resnet | Transfer learning |
 | Dry Bean | deepinsight | vit | Transfer learning |
 | Dry Bean | igtd | shallow | Rank-based mapping |
@@ -694,7 +697,7 @@ python src/visualize.py  # Generate all figures
 | Adult Income | naive | shallow | 34188 train, 108 features |
 | Adult Income | naive | resnet | Transfer learning |
 | Adult Income | naive | vit | Transfer learning |
-| Adult Income | deepinsight | shallow | t-SNE mapping |
+| Adult Income | deepinsight | shallow | PCA mapping |
 | Adult Income | deepinsight | resnet | Transfer learning |
 | Adult Income | deepinsight | vit | Transfer learning |
 | Adult Income | igtd | shallow | Rank-based mapping |

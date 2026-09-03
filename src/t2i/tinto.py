@@ -7,8 +7,10 @@ This creates continuous gradients that CNNs can extract features from
 more effectively.
 
 Key difference from DeepInsight:
-- DeepInsight: t-SNE -> pixel coordinates, no smoothing
-- TINTO: PCA/t-SNE -> pixel coordinates + Gaussian blurring filter
+- DeepInsight: PCA -> pixel coordinates (TINTOlib default, algorithm_rd='pca'),
+  no smoothing
+- TINTO: PCA -> pixel coordinates + Gaussian blurring filter
+  (this wrapper explicitly passes algorithm='PCA', see fit())
 
 The blurring propagates signal to adjacent pixels with decaying intensity,
 creating smoother spatial patterns. This helps CNN kernels (3x3) capture

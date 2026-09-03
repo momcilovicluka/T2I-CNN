@@ -25,7 +25,7 @@ determine if differences between methods are statistically significant.
 ### 1.2 Naive Baseline Confounded
 **Write:** "The naive reshape baseline produces images where 97%+ of
 pixels are zero-padded (breast cancer: 2.9% density, dry bean: 1.6%,
-adult income: 10.5%). This confounds feature arrangement quality with
+adult income: 10.2%). This confounds feature arrangement quality with
 feature density. Naive results should be interpreted as demonstrating
 the minimum performance without intelligent spatial mapping, not as a
 direct comparison of arrangement algorithms."
@@ -131,8 +131,10 @@ and re-split to ensure stratification."
 StandardScaler on train only prevents data leakage.
 
 **References:**
-- `src/preprocessing.py` lines 155-173: `preprocess()` function
-- `src/preprocessing.py` lines 198-213: Adult Income re-split
+- `src/preprocessing.py` `preprocess()`: stratified split + scaler
+- `src/preprocessing.py` `load_adult_income()`: '?'-rows dropped,
+  UCI train/test merged and re-split (canonical 45,222 instances,
+  104 features after one-hot; audit 2026-09-03, PART 15a)
 
 ### 2.2 T2I Methods
 **Write:** "Four tabular-to-image methods were implemented:
@@ -162,7 +164,7 @@ weights in the cross-entropy loss (sklearn compute_class_weight
 with 'balanced' mode). Primary evaluation metric was macro-F1, which
 gives equal weight to all classes regardless of frequency."
 
-**Why:** Dry Bean has 6.8:1 imbalance, Adult Income 3.2:1. Without
+**Why:** Dry Bean has 6.8:1 imbalance, Adult Income 3.0:1. Without
 class weights, models default to majority class. Macro-F1 prevents
 inflated accuracy metrics.
 
@@ -227,7 +229,7 @@ gradients, producing smoother transitions between feature pixels and
 zero-padded regions."
 
 **References:**
-- src/t2i/naive.py lines 38-47: bicubic with comment explaining WHY
+- src/t2i/naive.py `transform()`: bicubic with WHY comment
 
 ### 4.2 Why ImageNet Normalization for Pretrained Models
 **Write:** "Pretrained ResNet-18 and ViT inputs were normalized using
@@ -846,14 +848,14 @@ diagnostic (native 32 vs 128 for TINTO/DeepInsight, 2026-09-03)
 measured larger canvases as strictly worse because TINTOlib's
 blur/amplification parameters do not scale with the canvas.
 Adaptive sizing (compute_optimal_image_size, >=20% density target)
-remains available but is deliberately unused. Adult income's 108
-features at 10.5% single-pixel density is a documented limitation
+remains available but is deliberately unused. Adult income's 104
+features at 10.2% single-pixel density is a documented limitation
 (PART 1.2), not resolved by image sizing.
 
 ### 13g. Naive density attribution (supersedes PART 1.2 wording)
 
 See the correction inserted in PART 1.2. In short: the 2.9/1.6/
-10.5% densities and "97%+ zeros" describe point-mapped projection
+10.2% densities and "97%+ zeros" describe point-mapped projection
 layouts, not the current naive rendering; do not repeat that
 wording. Naive's real limitation is order-preserving, correlation-
 blind arrangement plus a padding band.
@@ -975,3 +977,76 @@ the GPU loss), so nothing else is invalidated by this decision. If ViT
 is re-added later, only its own 12 cells need GPU time; all other fixes
 (0e20179, 99432a1, 43210f4, 70b72c3, defb6fb, 3df3e17) are already in
 local code and remain mandatory before any run is written up.
+
+---
+
+## PART 15: Doc/Code Verification Audit (2026-09-03, post-705ede0)
+
+Three code defects surfaced while verifying every technical claim of
+the Serbian draft (`seminar2-rad-nacrt.md`) against the code. All three
+change inputs/metrics, and since every result is being regenerated from
+scratch (post-705ede0 CPU run), none invalidates an existing valid set
+— but any run started from older code must be discarded.
+
+### 15a. Adult "?" missing-value rows were NOT dropped (CRITICAL)
+
+**Bug:** `load_adult_income()` read the UCI files with
+`na_values=" ?"` (space-question) together with
+`skipinitialspace=True`. Pandas strips the leading space *before*
+matching `na_values`, so `" ?"` never matched: the parse produced 0
+missing cells in the train file, `dropna()` was a no-op, and every row
+with a missing value was kept as a literal `?` **one-hot category
+(occupation_?, workclass_?, native-country_?)**. The loader returned
+48,842 instances / 108 features instead of the canonical cleaned
+45,222 / 104.
+
+**Fix:** `na_values="?"` (matching the space-stripped token); verified:
+45,222 rows (34,014 vs 11,208; ratio 3.04 ≈ 3.0:1), 104 features
+(6 numerical + 98 one-hot), zero `?` categories.
+
+**Paper statement (methodology):** "Adult rows with missing values
+(marked '?') were removed before encoding (UCI convention), leaving
+45,222 instances and 104 features after one-hot encoding; the official
+train/test split was merged and re-stratified under the shared
+protocol." All Adult counts in tables/draft (rows, features, ~75:25,
+~3.0:1 imbalance) must use the cleaned numbers.
+
+### 15b. Naive per-batch intermediate clip removed (residual Bug #1)
+
+**Bug:** naive's resize branch clipped bicubic ringing with
+`np.clip(resized, images.min(), images.max())` — the bounds are the
+CURRENT SPLIT's raw grid min/max. For val/test (whose ranges differ
+from training's) this made the transform a different function per
+split: ringing undershoot near a split's own minimum became a nonzero
+pixel whose value depended on which split the sample was in — the same
+family as the Bug #1 train/val/test scale mismatch (fix a760bbf), only
+smaller in magnitude.
+
+**Fix:** removed the intermediate per-split clip; the only value
+transform is now the train-derived affine `(x - train_min) / (train_max
+- train_min)` followed by the constant `clip(0, 1)` — identical for
+train/val/test, matching the TINTO rescale pattern (10a).
+
+**Paper statement:** as already written in draft §3.2.1/5.4 — "naive
+normalizes with min/max computed once on the training split; the same
+function is applied to every split." Note the naive docstring and draft
+listing 5.3 both describe this exact protocol.
+
+### 15c. Docstring corrections: DeepInsight projection is PCA, not t-SNE
+
+**Bug:** `src/t2i/deepinsight.py` and `src/t2i/tinto.py` module
+docstrings described DeepInsight as "t-SNE". The wrappers never set
+`algorithm_rd`, so TINTOlib's default applies — verified in
+`TINTOlib/deepInsight.py`: `algorithm_rd=constants.pca_algorithm`
+(PCA). The draft/guide correctly said PCA (§3.2.2, Table 4.2); only the
+code docstrings were stale.
+
+**Fix:** both docstrings now state PCA (TINTOlib default) and that
+coordinates reflect linear/correlation structure. Also corrected the
+`load_adult_income()` docstring's "6 categorical + 8 numerical" swap
+(actual: 8 categorical + 6 numerical) and its sample count.
+
+**Paper statement:** the paper can state "features are projected with
+PCA (TINTOlib's default projection)"; do not write t-SNE anywhere for
+the implemented methods. (t-SNE belongs only to the original
+DeepInsight *paper* description in §2.)

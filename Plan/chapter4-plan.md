@@ -29,13 +29,14 @@ retained; paper-statement-guide PART 14).
 |---------|---------|----------|---------|-----------|----------------------|
 | Breast Cancer Wisconsin | 569 | 30 | 2 (malignant/benign) | 1.7:1 | 398/57/114 |
 | Dry Bean | 13,611 | 16 | 7 | 6.8:1 | 9,527/1,361/2,723 |
-| Adult Income | 48,842 | 108 (after encoding) | 2 (≤50K/>50K) | 3.2:1 | 34,188/4,885/9,769 |
+| Adult Income | 45,222 | 104 (after encoding) | 2 (≤50K/>50K) | 3.0:1 | 31,654/4,523/9,045 |
 
 **Text to write:**
 - Describe each dataset: source (UCI/sklearn), domain, feature types (numerical/categorical)
 - Justify dataset selection: covers binary/multi-class, small/large, balanced/imbalanced
 - Explain preprocessing: StandardScaler (fit on train), stratified split, one-hot encoding
-- Note Adult Income: 14 raw features → 108 after one-hot encoding
+- Note Adult Income: 14 raw features → 104 after one-hot encoding
+  (rows with '?' removed first — guide PART 15a)
 
 **Code reference:** `src/preprocessing.py`
 
@@ -46,13 +47,13 @@ retained; paper-statement-guide PART 14).
 | Method | Algorithm | Feature Mapping | Image Size | Pixel Density |
 |--------|-----------|----------------|------------|---------------|
 | Naive Reshape | Pad + reshape + bicubic resize | Sequential (row-major) | Adaptive | 25–47% |
-| DeepInsight | t-SNE → pixel coordinates | Manifold-based | 32×32 | Varies |
+| DeepInsight | PCA → pixel coordinates (TINTOlib default) | Manifold-based | 32×32 | Varies |
 | IGTD | Rank-based permutation | Distance-preserving | 32×32 | Varies |
 
 **Text to write:**
 - Describe each method's algorithm (1 paragraph each)
 - Naive: pad to next perfect square, reshape to grid, bicubic upscale to 32×32
-- DeepInsight: compute feature-feature correlation matrix, t-SNE to 2D, assign pixel coordinates, fill with normalized values
+- DeepInsight: compute feature-feature correlation structure, project with PCA (TINTOlib default projection) to 2D, assign pixel coordinates, fill with normalized values
 - TINTO: similar to DeepInsight but adds artistic blurring filter to smooth spatial patterns, reducing sharp transitions between adjacent features
 - IGTD: rank feature-feature distances, rank pixel-pixel distances, minimize Frobenius norm via iterative swapping
 - ~~S-IGTD~~ (Supervised IGTD): NOT EVALUATED — the wrapper duplicated IGTD and was dropped (paper-statement-guide PART 13i). Reference in Related Work only.
@@ -100,7 +101,7 @@ retained; paper-statement-guide PART 14).
 **Text to write:**
 - Justify each hyperparameter choice
 - Explain class weighting: Dry Bean has 6.8:1 imbalance, without weights majority-class classifier gets 26% accuracy (random-level)
-- Explain macro-F1: accuracy is misleading with imbalance (Adult Income: majority class = 76.1%)
+- Explain macro-F1: accuracy is misleading with imbalance (Adult Income: majority class = 75.2%)
 - State: "Hyperparameters were fixed across all experiments to ensure fair comparison"
 
 ### 4.1.5 Baselines

@@ -1,8 +1,11 @@
 """
 DeepInsight: manifold projection-based tabular-to-image transformation.
 
-Uses t-SNE to map feature similarities to 2D pixel coordinates,
-then maps feature intensities to pixel locations.
+Projects features as points in sample space and maps them to 2D pixel
+coordinates. The projection algorithm is TINTOlib's default, PCA
+(algorithm_rd='pca'); this wrapper does not override it, so the
+coordinates reflect the linear (correlation) structure of the features.
+Intensities are then placed at the mapped pixel locations.
 
 Wraps TINTOlib's DeepInsight implementation.
 """
