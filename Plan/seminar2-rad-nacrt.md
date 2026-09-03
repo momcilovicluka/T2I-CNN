@@ -10,8 +10,10 @@
 > formule, slike/tabele/listinzi sa oznakama, reference u IEEE stilu [n].
 >
 > Poglavlje **5. Implementacija** sadrži isečke iz koda (listingi 5.1–5.11) sa
-> objašnjenjima *zašto* je svaki pristup izabran; listingi su skraćeni izvodi —
-> pre prenosa u rad proveriti da odgovaraju aktuelnom stanju repozitorijuma.
+> objašnjenjima *zašto* je svaki pristup izabran. Listingi su skraćeni izvodi,
+> ali **svaka prikazana linija odgovara liniji u repozitorijumu** (provereno
+> 2026-09-03); elidirani delovi označeni su redom „…“, a izvor svakog listinga
+> naveden je u caption-u (npr. 5.6: `run_all.py` i `src/train.py`).
 
 ---
 
@@ -584,18 +586,24 @@ prikazuje jezgro funkcije `preprocess()`.
 
 ```
 def preprocess(X, y, test_size=0.2, val_size=0.1, random_state=42):
-    # 1) prva podela: train+val vs test (stratifikovano)
+    ...
+    # First split: train+val vs test
     X_temp, X_test, y_temp, y_test = train_test_split(
-        X, y, test_size=test_size, stratify=y, random_state=random_state)
-    # 2) druga podela: train vs val (relativna veličina 10% od 80%)
+        X, y, test_size=test_size, stratify=y, random_state=random_state
+    )
+
+    # Second split: train vs val (adjust val_size relative to temp)
+    relative_val_size = val_size / (1 - test_size)
     X_train, X_val, y_train, y_val = train_test_split(
-        X_temp, y_temp, test_size=val_size / (1 - test_size),
-        stratify=y_temp, random_state=random_state)
-    # 3) StandardScaler: fit ISKLJUČIVO na treningu
+        X_temp, y_temp, test_size=relative_val_size, stratify=y_temp, random_state=random_state
+    )
+
+    # StandardScaler: fit on train only
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train).astype(np.float32)
-    X_val   = scaler.transform(X_val).astype(np.float32)
-    X_test  = scaler.transform(X_test).astype(np.float32)
+    X_val = scaler.transform(X_val).astype(np.float32)
+    X_test = scaler.transform(X_test).astype(np.float32)
+
     return X_train, X_val, X_test, y_train, y_val, y_test
 ```
 Listing 5.1. Stratifikovana podela i skaliranje bez curenja informacija
@@ -617,19 +625,28 @@ Sve metode preslikavanja izložene su kroz jedinstven interfejs sa fazama
 
 ```
 class T2ITransformer:
-    METHODS = {'naive': NaiveReshape, 'tinto': TINTO,
-               'deepinsight': DeepInsight, 'igtd': IGTD}
+    """Unified interface for all T2I transformation methods."""
+
+    METHODS = {
+        'naive': NaiveReshape,
+        'tinto': TINTO,
+        'deepinsight': DeepInsight,
+        'igtd': IGTD,
+    }
 
     def __init__(self, method='naive', image_size=32, auto_size=False, **kwargs):
+        ...
         self.transformer = self.METHODS[method](image_size=image_size, **kwargs)
 
     def fit(self, X_train, y_train=None):
-        # koordinate/statistike se uče ISKLJUČIVO na trening skupu
+        ...
         self.transformer.fit(X_train, y_train)
         return self
 
     def transform(self, X, y=None):
-        return self.transformer.transform(X, y)   # -> (N, 1, H, W)
+        """Transform to images. y needed for TINTOlib methods.
+        Returns: torch.Tensor of shape (N, 1, H, W)"""
+        return self.transformer.transform(X, y)
 ```
 Listing 5.2. Zajednički interfejs T2I metoda (`src/t2i/__init__.py`, skraćeno).
 
@@ -646,33 +663,52 @@ interpolacije i opasnost od normalizacije po podskupu.
 
 ```
 def fit(self, X_train, y_train=None):
+    ...
     n_features = X_train.shape[1]
     self.grid_size = int(np.ceil(np.sqrt(n_features)))
     self.padded_size = self.grid_size ** 2
-    # FIX (curenje informacija): min/max se računaju na TRENINGU i čuvaju
-    padded = np.zeros((X_train.shape[0], self.padded_size), dtype=np.float32)
-    padded[:, :X_train.shape[1]] = X_train
-    grid = padded.reshape(X_train.shape[0], self.grid_size, self.grid_size)
-    self._train_min, self._train_max = grid.min(), grid.max()
+
+    # Compute normalization stats from training data only (no leakage)
+    padded_train = np.zeros((X_train.shape[0], self.padded_size), dtype=np.float32)
+    padded_train[:, :X_train.shape[1]] = X_train
+    grid_train = padded_train.reshape(X_train.shape[0], self.grid_size, self.grid_size)
+    self._train_min = grid_train.min()
+    self._train_max = grid_train.max()
+    return self
 
 def transform(self, X, y=None):
-    padded = np.zeros((X.shape[0], self.padded_size), dtype=np.float32)
+    ...
+    N = X.shape[0]
+
+    # Pad each sample to perfect square length
+    padded = np.zeros((N, self.padded_size), dtype=np.float32)
     padded[:, :X.shape[1]] = X
-    images = padded.reshape(X.shape[0], self.grid_size, self.grid_size)
-    if self.grid_size != self.image_size:        # npr. 6x6 -> 32x32
-        # BIKUBIČNO umesto najbližeg suseda: glatkiji prelazi; jezgro 4x4
-        # računa težinske proseke pa vrednosti mogu preći ulazni opseg —
-        # zato se isecanje obavlja TEK posle normalizacije, na [0,1]
-        # (starija verzija je isecala po opsegu TEKUĆEG podskupa — različita
-        # transformacija za trening/validaciju/test; ispravljeno, videti 5.4)
-        resized = np.stack([np.asarray(
-            Image.fromarray(images[i]).resize(
-                (self.image_size, self.image_size), Image.BICUBIC))
-            for i in range(len(images))], axis=0)
+
+    # Reshape to square grid (N, grid, grid)
+    images = padded.reshape(N, self.grid_size, self.grid_size)
+    ...
+    if self.grid_size != self.image_size:
+        resized = np.zeros((N, self.image_size, self.image_size), dtype=np.float32)
+        for i in range(N):
+            img = Image.fromarray(images[i])
+            img = img.resize((self.image_size, self.image_size), Image.BICUBIC)
+            resized[i] = np.array(img, dtype=np.float32)
+        # FIX (audit 2026-09-03): no intermediate clip here. The old
+        ...
         images = resized
-    # min-max sa TRENINGA (fiksno), ne po podskupu; zatim isecanje na [0,1]
-    images = (images - self._train_min) / (self._train_max - self._train_min)
-    return torch.tensor(np.clip(images, 0, 1)).unsqueeze(1).float()
+    ...
+    rng = self._train_max - self._train_min
+    if rng > 0:
+        images = (images - self._train_min) / rng
+    else:
+        images = np.zeros_like(images)
+
+    # Clamp to [0, 1] for consistency.
+    ...
+    images = np.clip(images, 0, 1)
+
+    # Add channel dimension: (N, 1, H, W)
+    return torch.tensor(images).unsqueeze(1).float()
 ```
 Listing 5.3. Naivno preslikavanje (`src/t2i/naive.py`, skraćeno).
 
@@ -702,18 +738,27 @@ DataFrame-u). Listing 5.4 pokazuje kako se slike čitaju **po indeksu** primera.
 
 ```
 def _load_tinto_images(temp_dir, N, y):
+    ...
     images = []
     for i in range(N):
         label = int(y[i]) if y is not None else 0
-        subfolder = str(label).zfill(2)          # klasa -> podfolder
-        filename = str(i).zfill(6) + '.npy'      # indeks -> ime fajla
+        subfolder = str(label).zfill(2)
+        filename = str(i).zfill(6) + '.npy'
         img_path = os.path.join(temp_dir, subfolder, filename)
-        if not os.path.exists(img_path):         # kontrola poravnanja
-            raise FileNotFoundError(f"TINTOlib image not found: {img_path} ...")
-        images.append(np.load(img_path))
+
+        # Alignment assertion: verify file exists
+        if not os.path.exists(img_path):
+            raise FileNotFoundError(
+                f"TINTOlib image not found: {img_path}"
+                f"\n  sample={i}, label={label}, temp_dir={temp_dir}"
+                ...
+            )
+
+        arr = np.load(img_path)
+        images.append(arr)
     return np.stack(images)
 ```
-Listing 5.4. Čitanje slika po indeksu primera (`src/t2i/__init__.py`).
+Listing 5.4. Čitanje slika po indeksu primera (`src/t2i/__init__.py`, skraćeno).
 
 **Zašto je ovo kritično:** TINTOlib dodatno upisuje CSV koji fajlove navodi u
 *redosledu imena*, a ne u redosledu ulaznog DataFrame-a. Ako bi se slike čitale
@@ -734,16 +779,19 @@ modeli nikada nisu naučili. Rešenje (Listing 5.5): normalizacija statistikama
 prvog (trening) transforma, uz isecanje na [0,1].
 
 ```
-# FIX: TINTOlib-ov TINTO ne skalira na [0,1] (blur kompresuje vrhove,
-# npr. max ~0.30 na Breast Cancer). Posle ImageNet normalizacije
-# (sredina 0.485) SVI pikseli bi bili negativni -> pretrenirani ReLU kolabira.
-if self._pix_min is None:          # keš sa PRVOG (trening) transforma
+# FIX (audit 2026-09-03): TINTOlib's TINTO does NOT scale features
+# to [0,1] — blurring compresses peaks (breast cancer max=0.30).
+# After ImageNet normalization (mean 0.485), ALL pixels go negative
+# and pretrained ReLU collapses. Normalize to [0,1] using stats
+# cached from the FIRST transform call (training split — run_all.py
+# always transforms train before val/test), then clip.
+if self._pix_min is None:
     self._pix_min = float(images.min())
     self._pix_max = float(images.max())
 rng = self._pix_max - self._pix_min
 if rng > 1e-8:
     images = (images - self._pix_min) / rng
-images = np.clip(images, 0, 1)     # konačna garancija opsega
+images = np.clip(images, 0, 1)
 ```
 Listing 5.5. Normalizacija TINTO izlaza statistikama trening transforma
 (`src/t2i/tinto.py`, skraćeno).
@@ -765,25 +813,35 @@ dobijaju ImageNet-normalizovan RGB ulaz.
 
 ```
 def create_cnn_model(arch, num_classes):
-    # pretrenirani modeli: input_channels=3 — primaju ImageNet-normalizovan
-    # RGB ulaz (imagenet_normalize ponavlja sivi kanal 3 puta); time se
-    # zadržava originalni 3-kanalni conv1 sa pretreniranim težinama.
-    if arch == 'resnet':          # pretrenirani ResNet-18
+    ...
+    if arch == 'shallow':
+        from src.models.shallow_cnn import ShallowCNN
+        return ShallowCNN(num_classes=num_classes)
+    elif arch == 'resnet':
+        from src.models.resnet_wrapper import ResNetWrapper
         return ResNetWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
-    if arch == 'vit':             # pretrenirani ViT-Base/16
-        return ViTWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
-    if arch == 'resnet_scratch':  # ResNet-18 od nule -> siva slika, 1 kanal
+    elif arch == 'resnet_scratch':
+        from src.models.resnet_wrapper import ResNetWrapper
         return ResNetWrapper(num_classes=num_classes, pretrained=False, input_channels=1)
-    return ShallowCNN(num_classes=num_classes)   # 1 kanal, od nule
+    elif arch == 'vit':
+        from src.models.vit_wrapper import ViTWrapper
+        return ViTWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
+    else:
+        raise ValueError(f"Unknown architecture: {arch}")
 
-# u src/train.py — primena normalizacije samo za pretrenirane modele:
+
+# ImageNet normalization constants for pretrained models (ResNet, ViT)
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
-IMAGENET_STD  = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
+
 
 def imagenet_normalize(images):
-    images_rgb = images.repeat(1, 3, 1, 1)         # (N,1,H,W) -> (N,3,H,W)
-    return (images_rgb - IMAGENET_MEAN.to(images.device)) \
-                     / IMAGENET_STD.to(images.device)
+    ...
+    # Convert grayscale to RGB by repeating channel
+    images_rgb = images.repeat(1, 3, 1, 1)  # (N, 3, H, W)
+    # Apply ImageNet normalization
+    images_norm = (images_rgb - IMAGENET_MEAN.to(images.device)) / IMAGENET_STD.to(images.device)
+    return images_norm
 ```
 Listing 5.6. Modeli i ImageNet normalizacija (`run_all.py`, `src/train.py`,
 skraćeno).
@@ -801,31 +859,45 @@ Listing 5.7 prikazuje srž petlje treninga: funkciju gubitka sa klasnim
 težinama i label smoothing-om, optimizator, raspored stope i rano zaustavljanje.
 
 ```
-class_weights = config.get('class_weights', None)
-label_smoothing = config.get('label_smoothing', 0.1)
-criterion = nn.CrossEntropyLoss(
-    weight=class_weights, label_smoothing=label_smoothing)
-
-optimizer = torch.optim.Adam(model.parameters(),
-                             lr=lr, weight_decay=weight_decay)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    optimizer, mode='min', factor=0.5, patience=5)
-
-best_val_loss = float('inf'); epochs_no_improve = 0
-for epoch in range(epochs):
-    ... # treniranje po minibatčevima (ImageNet norm ako je pretreniran)
-    ... # evaluacija na validacionom skupu -> val_loss, val_acc
-
-    scheduler.step(val_loss)            # smanji lr posle 5 epoha bez poboljšanja
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss        # čuvamo NAJBOLJE težine, ne poslednje
-        best_model_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
-        epochs_no_improve = 0
+def train_model(model, train_loader, val_loader, config):
+    ...
+    class_weights = config.get('class_weights', None)
+    label_smoothing = config.get('label_smoothing', 0.1)
+    if class_weights is not None:
+        class_weights = class_weights.to(device)
+        criterion = nn.CrossEntropyLoss(
+            weight=class_weights, label_smoothing=label_smoothing
+        )
     else:
-        epochs_no_improve += 1
-        if epochs_no_improve >= patience:   # patience = 15
-            break                           # rano zaustavljanje
-model.load_state_dict(best_model_state)
+        criterion = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, mode='min', factor=0.5, patience=5
+    )
+    ...
+    for epoch in range(epochs):
+        ...
+        # Learning rate scheduling
+        scheduler.step(val_loss)
+
+        # Early stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_model_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            epochs_no_improve = 0
+        else:
+            epochs_no_improve += 1
+        ...
+        if epochs_no_improve >= patience:
+            ...
+            break
+    ...
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+    model = model.cpu()
+
+    return model, history
 ```
 Listing 5.7. Petlja treninga (`src/train.py`, skraćeno).
 
@@ -856,13 +928,14 @@ Listing 5.8 prikazuje konačno rešenje — tabelu stopa po arhitekturi.
 
 ```
 # Per-architecture learning rates.
-# FIX (2026-09-03, provereno): zajedničko lr=1e-3 čini da pretrenirani
-# ViT-B/16 divergira na T2I slikama — trening gubitak zaključan na log(2)
-# (~0.698) kroz 20 epoha, val acc na pragovima klasa, F1~0. Fino podešavanje
-# pretreniranog ViT-a na 1e-3 je ~100x iznad uobičajenog opsega (timm praksa
-# ~1e-5..1e-4). Proba na breast_cancer/tinto: na 1e-4 isti model dostiže
-# ~0.91 val acc u 5 epoha. Modeli od nule i pretrenirani ResNet-18 (BatchNorm
-# robusnost) konvergiraju bez problema na 1e-3, pa se menja SAMO ViT.
+# FIX (2026-09-03, probe-verified): the shared lr=1e-3 makes pretrained
+# ViT-B/16 diverge on sparse T2I inputs — train loss pinned at log(2)
+# (~0.698) for 20 epochs, val acc stuck at class priors, F1~0. Fine-tuning
+# a pretrained ViT at lr=1e-3 is ~100x the established range (timm
+# practice ~1e-5..1e-4). Probe on breast_cancer/tinto: at lr=1e-4 the
+# same setup reaches ~0.91 val acc within 5 epochs and 0.42 train loss
+# by epoch 8. From-scratch models and pretrained ResNet-18 (BatchNorm
+# robustness) converge fine at 1e-3, so only ViT is lowered.
 ARCH_LR = {
     'shallow': 1e-3,
     'resnet': 1e-3,
@@ -887,25 +960,25 @@ Evaluacija se radi na test skupu odmah po treningu; rezultati se čuvaju
 **atomski** (Listing 5.9), a nastavak rada prepoznaje samo kompletne rezultate.
 
 ```
-# upis preko .tmp + os.replace = ATOMSKI upis: prekid (Ctrl+C, Colab timeout,
-# OOM) nikada ne ostavlja polovičan JSON koji bi resume preskočio zauvek
-tmp_file = result_file.with_suffix('.json.tmp')
-with open(tmp_file, 'w') as f:
-    json.dump(metrics, f, indent=2, default=to_serializable)
-os.replace(str(tmp_file), str(result_file))
-
 def _experiment_is_done(result_file):
-    # rezultat je „gotov“ SAMO ako je fajl čitljiv JSON sa ključevima
-    # dataset i f1_macro; iskvarene/polovične fajlove resume ponovo radi
+    ...
     if not result_file.exists():
         return False
     try:
-        data = json.load(open(result_file))
+        with open(result_file) as f:
+            data = json.load(f)
         return isinstance(data, dict) and 'dataset' in data and 'f1_macro' in data
     except (json.JSONDecodeError, OSError):
         return False
+
+...
+    tmp_file = result_file.with_suffix('.json.tmp')
+    with open(tmp_file, 'w') as f:
+        json.dump(metrics, f, indent=2, default=to_serializable)
+    os.replace(str(tmp_file), str(result_file))
 ```
-Listing 5.9. Atomsko čuvanje i validacija rezultata (`run_all.py`, skraćeno).
+Listing 5.9. Validacija rezultata (`_experiment_is_done()`) i atomski upis
+(`run_all.py` — odlomak iz `run_single_experiment()`, skraćeno).
 
 **Zašto:** eksperimenti traju satima (naročito ViT ćelije); prekid ne sme da
 uništi prethodni rad niti da ostavi fajl koji će nastavak pogrešno smatrati
@@ -925,13 +998,17 @@ neupotrebljivo male; `layer3` daje 4×4 karte.
 
 ```
 def get_target_layer(model, arch):
+    ...
     if arch == 'shallow':
-        return model.features[8]        # poslednji Conv2d (128 kanala)
-    if arch in ('resnet', 'resnet_scratch'):
-        # layer4 na 32x32 daje karte 2x2 -> premalo; layer3 daje 4x4
+        return model.features[8]
+    elif arch in ('resnet', 'resnet_scratch'):
+        # Use layer3 instead of layer4 — layer4 produces 2x2 maps on 32x32
+        # layer3 produces 4x4 maps which are still small but better
         return model.backbone.layer3[-1].conv2
+    else:
+        raise ValueError(f"Grad-CAM not supported for architecture: {arch}")
 ```
-Listing 5.10. Izbor ciljnog sloja za Grad-CAM (`src/gradcam.py`).
+Listing 5.10. Izbor ciljnog sloja za Grad-CAM (`src/gradcam.py`, skraćeno).
 
 **Pixel shuffling.** Ablacija iz odeljka 4.7 (Listing 5.11) uništava prostorni
 raspored *bez promene raspodele intenziteta*: ista permutacija primenjuje se na
@@ -939,13 +1016,22 @@ sve slike, pa svaki piksel zadržava svoju vrednost, ali na pogrešnom mestu.
 
 ```
 def shuffle_pixels(images, seed=42):
-    # ista permutacija za sve primere: raspodela intenziteta ostaje ista,
-    # prostorni odnosi bivaju uništeni -> merimo čist efekat rasporeda
+    ...
     rng = np.random.RandomState(seed)
     N, C, H, W = images.shape
-    perm = rng.permutation(H * W)
+    n_pixels = H * W
+
+    # Create random permutation of pixel positions
+    perm = rng.permutation(n_pixels)
+
+    # Apply same permutation to all images
+    shuffled = images.copy()
     for i in range(N):
-        images[i, 0] = images[i, 0].reshape(-1)[perm].reshape(H, W)
+        flat = shuffled[i, 0].reshape(n_pixels)
+        flat = flat[perm]
+        shuffled[i, 0] = flat.reshape(H, W)
+
+    return shuffled
 ```
 Listing 5.11. Ablacija mešanja piksela (`src/ablation.py`, skraćeno).
 
@@ -1148,6 +1234,7 @@ odgovarati kodu — svaka ima zabeležen razlog u `Plan/paper-statement-guide.md
 - [ ] Ne koristiti tvrdnje iz PART 7 (LP-FT/CV/adaptivno) — nisu deo protokola.
 - [ ] ViT pomenuti samo kao van glavne serije + nalaz o stopi 1e-4 kao
       osnovu za budući rad (PART 12, 14).
-- [ ] Listinge 5.1–5.11 proveriti pre slanja — skraćeni su izvodi iz aktuelnog
-      koda (fajl je naveden u svakom listingu).
+- [x] Listinge 5.1–5.11 proveriti pre slanja — skraćeni su izvodi iz aktuelnog
+      koda (fajl je naveden u svakom listingu; provereno 2026-09-03: svaka
+      linija listinga odgovara liniji repozitorijuma).
 - [ ] Reference prebaciti iz `Notebook/references.bib`.
