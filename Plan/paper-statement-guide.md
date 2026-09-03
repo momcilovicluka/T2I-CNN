@@ -825,7 +825,10 @@ RESOLVED 2026-09-03: Option B adopted — no re-run. Reporting rules:
   computed on the positive class for the binary datasets (breast
   cancer: benign; adult income: >50K)."
 The code key stays f1_macro (internal); do not rename keys — only
-labels and paper wording change.
+labels and paper wording change. Implemented in figure code
+(visualize.py F1_LABEL): per-dataset heatmap/baseline axes carry the
+honest per-dataset label; shared-axis ablation charts use the neutral
+"F1 (%)".
 
 ### 13f. Fixed 32x32 canvas (supersedes PART 7a and workflow CP3 row 8)
 

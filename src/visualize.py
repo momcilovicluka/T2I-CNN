@@ -31,6 +31,15 @@ DATASET_LABELS = {
     'adult_income': 'Adult Income\n(108 features, 2 classes)',
 }
 T2I_METHODS = ['naive', 'tinto', 'deepinsight', 'igtd']  # s_igtd dropped (duplicates igtd, PART 13i)
+
+# Honest F1 label per dataset (PART 13e resolution): 'macro' is only true
+# for the 7-class dry_bean; the two binary datasets store scikit 'binary'
+# F1 (positive class only: benign for breast, >50K for adult).
+F1_LABEL = {
+    'breast_cancer': 'F1 (positive class, %)',
+    'dry_bean': 'Macro-F1 (%)',
+    'adult_income': 'F1 (positive class, %)',
+}
 T2I_LABELS = {
     'naive': 'Naive', 'tinto': 'TINTO', 'deepinsight': 'DeepInsight',
     'igtd': 'IGTD',
@@ -150,8 +159,8 @@ def plot_main_results_heatmap(results, output_dir='results/figures'):
                             fontsize=12, fontweight='bold', color=color)
 
         # Colorbar
-        cbar = fig.colorbar(im, ax=ax, shrink=0.8, label='Macro-F1 (%)')
-        ax.set_title(f'{DATASET_LABELS[dataset]} — Macro-F1 (%)',
+        cbar = fig.colorbar(im, ax=ax, shrink=0.8, label=F1_LABEL[dataset])
+        ax.set_title(f'{DATASET_LABELS[dataset]} — {F1_LABEL[dataset]}',
                      fontsize=13, fontweight='bold', pad=12)
 
         plt.tight_layout()
@@ -208,7 +217,7 @@ def plot_baseline_comparison(results, output_dir='results/figures'):
         ax.set_xticks(range(len(baseline_names)))
         ax.set_xticklabels(baseline_names, fontsize=9)
         ax.set_ylim(0, 105)
-        ax.set_ylabel('Macro-F1 (%)' if idx == 0 else '')
+        ax.set_ylabel(F1_LABEL[dataset] if idx == 0 else '')
         ax.set_title(DATASET_LABELS[dataset], fontsize=11, fontweight='bold')
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
@@ -453,7 +462,7 @@ def plot_ablation_results(output_dir='results/figures'):
 
         ax.set_xticks(x)
         ax.set_xticklabels(labels, fontsize=10)
-        ax.set_ylabel('Macro-F1 (%)')
+        ax.set_ylabel('F1 (%)')  # shared axis across datasets: macro for dry_bean, positive-class otherwise (PART 13e)
         ax.set_title('Ablation: Pixel Shuffling (DeepInsight + ShallowCNN)',
                      fontsize=12, fontweight='bold')
         ax.legend(fontsize=10)
