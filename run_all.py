@@ -265,7 +265,7 @@ def run_baseline(dataset, model_type, output_dir='results'):
     metrics['test_samples'] = len(X_test)
     metrics['train_time_sec'] = round(train_time, 1)
 
-    # 4. Save results
+    # 4. Save results (atomic write)
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
     result_file = output_path / f"baseline_{dataset}_{model_type}.json"
@@ -279,8 +279,11 @@ def run_baseline(dataset, model_type, output_dir='results'):
             return obj.tolist()
         return obj
 
-    with open(result_file, 'w') as f:
+    import os
+    tmp_file = result_file.with_suffix('.json.tmp')
+    with open(tmp_file, 'w') as f:
         json.dump(metrics, f, indent=2, default=to_serializable)
+    os.replace(str(tmp_file), str(result_file))
 
     print(f"  -> {result_file.name}: F1={metrics['f1_macro']:.4f}, "
           f"Acc={metrics['accuracy']:.4f} ({train_time:.0f}s)")
@@ -355,6 +358,12 @@ def main():
     results_dir = Path('results')
     results_dir.mkdir(exist_ok=True)
 
+    # Clean up any partial .json.tmp files from interrupted previous runs
+    import os
+    for tmp in results_dir.glob('*.json.tmp'):
+        print(f"  Cleaning up partial file: {tmp.name}")
+        os.remove(str(tmp))
+
     if args.aggregate:
         aggregate_results()
         return
@@ -372,8 +381,21 @@ def main():
             for d, t, c in combos:
                 print(f"  {d} + {t} + {c}")
         else:
+            # Count already-done experiments for resume summary
+            done_count = 0
+            for dataset, t2i, cnn in combos:
+                rf = results_dir / f"{dataset}_{t2i}_{cnn}.json"
+                if rf.exists():
+                    done_count += 1
+            if done_count > 0:
+                print(f"Resume: {done_count}/{len(combos)} already done, running {len(combos)-done_count} remaining")
+
             print(f"Running {len(combos)} CNN experiments...")
             for i, (dataset, t2i, cnn) in enumerate(combos, 1):
+                result_file = results_dir / f"{dataset}_{t2i}_{cnn}.json"
+                if result_file.exists():
+                    print(f"\n[{i}/{len(combos)}] {dataset} + {t2i} + {cnn} — SKIP (done)")
+                    continue
                 print(f"\n[{i}/{len(combos)}] {dataset} + {t2i} + {cnn}")
                 try:
                     run_single_experiment(dataset, t2i, cnn)
@@ -392,8 +414,20 @@ def main():
             for d, m in combos:
                 print(f"  {d} + {m}")
         else:
+            done_count = 0
+            for dataset, model in combos:
+                rf = results_dir / f"baseline_{dataset}_{model}.json"
+                if rf.exists():
+                    done_count += 1
+            if done_count > 0:
+                print(f"Resume: {done_count}/{len(combos)} already done, running {len(combos)-done_count} remaining")
+
             print(f"\nRunning {len(combos)} baseline experiments...")
             for i, (dataset, model) in enumerate(combos, 1):
+                result_file = results_dir / f"baseline_{dataset}_{model}.json"
+                if result_file.exists():
+                    print(f"\n[{i}/{len(combos)}] {dataset} + {model} — SKIP (done)")
+                    continue
                 print(f"\n[{i}/{len(combos)}] {dataset} + {model}")
                 try:
                     run_baseline(dataset, model)

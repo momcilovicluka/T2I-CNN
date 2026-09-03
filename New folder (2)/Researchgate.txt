@@ -1,0 +1,1 @@
+("tabular data" OR "table" OR "spreadsheet" OR "structured data" OR "tabular features") AND ("to image" OR "image conversion" OR "image transformation" OR "image generation" OR "image representation" OR "pixel-based") AND ("convolutional neural network" OR "CNN" OR "CNNs" OR "DeepInsight" OR "IGTD" OR "REFINED" OR "HACNet")
