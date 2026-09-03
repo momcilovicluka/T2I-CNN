@@ -282,7 +282,11 @@ pripisati kapacitetu ili transfer učenju.
 $y = \mathcal{F}(x, W) + x$, ~11M parametara. U radu se koristi u dve varijante:
 pretrenirana na ImageNet-u (`pretrained=True`, ulaz 3 kanala sa ImageNet
 normalizacijom) i od nule (`pretrained=False`, ulaz 1 kanal — siva slika).
-Ova dva režima razdvajaju efekat **kapaciteta** od efekta **pretreniranosti**.
+Kako se režimi razlikuju i po pretreniranosti i po ulaznoj reprezentaciji (3
+kanala sa ImageNet normalizacijom naspram 1 kanala sirove sive slike),
+njihovo poređenje daje **kombinovani** efekat tih razlika na istom kapacitetu
+(~11M parametara), a ne čisto efekat pretreniranosti — tumačenje u 6.3 to
+uzima u obzir.
 
 **ViT-Base/16** — Vision Transformer, ~86M parametara, patch veličine 16.
 Slika $32\times32$ se bilinearnom interpolacijom skalira na $224\times224$
@@ -874,7 +878,9 @@ sloja jednokanalnim (npr. usrednjavanjem težina po kanalima), ali tada model
 više nije „pravi“ pretrenirani model. Ponavljanje sivog kanala u RGB zadržava
 originalne težine, a normalizacija čini da raspodela ulaza odgovara onoj na
 kojoj je mreža trenirana. Modeli od nule rade sa sivim slikama (1 kanal), jer
-nemaju pretrenirane težine koje bi trebalo „uskladiti“ sa domenom.
+nemaju pretrenirane težine koje bi trebalo „uskladiti“ sa domenom. Posledica:
+poređenje pretreniranog i od-nule ResNet-a nije čisto poređenje efekta
+pretreniranosti — razlikuje se i ulazni domen; videti 3.3 i 6.3.
 
 ## 5.8 Petlja treninga: regularizacija i rano zaustavljanje
 
@@ -1110,13 +1116,16 @@ nadmašuje XGBoost i na kojoj margini; napomena da su baselajni nepodešeni].
 ## 6.3 Transfer učenje
 
 - Uporediti `resnet` (pretrenirani) sa `resnet_scratch` (isti kapacitet, bez
-  pretreniranosti) po metodi i skupu → efekat pretreniranosti.
+  pretreniranosti) po metodi i skupu → kombinovani efekat (pretreniranost i
+  ulazna reprezentacija; videti 3.3).
 - **Slika 6.1. Efekat transfer učenja** (`ch4_transfer_delta.png`): po metodi
-  i skupu prikazana je razlika $\Delta F1 = F1_{\text{pretrenirani}} -
-  F1_{\text{od nule}}$ u procentnim poenima (zelene šipke — pozitivan efekat
-  pretreniranosti, crvene — negativan transfer). Poređenje je kontrolisano:
-  arhitekture su identične (ResNet-18) i razlikuju se samo po pretreniranosti;
-  uporedive su vrednosti unutar skupa (ista semantika F1), ne i među skupovima.
+  i skupu prikazana je razlika $\Delta F1 = F1_{	ext{pretrenirani}} -
+  F1_{	ext{od nule}}$ u procentnim poenima (zelene šipke — pozitivan efekat,
+  crvene — negativan). Arhitekture su identične (ResNet-18, ~11M parametara),
+  ali se ulazi razlikuju: pretrenirani prima 3 kanala sa ImageNet
+  normalizacijom, a od-nule 1 kanal sirove sive slike, pa Δ meri
+  **kombinovani** efekat pretreniranosti i ulaznog domena (napomena u 3.3).
+  Uporedive su vrednosti unutar skupa (ista semantika F1), ne i među skupovima.
 - [TBD vrednosti]; diskutovati u svetlu sintetičke prirode slika (odeljak 3.4)
   i činjenice da su pretrenirani modeli primali ImageNet normalizovan RGB ulaz.
 - (Samo ako je ViT ponovo uključen: proveriti da li svaka ćelija pokazuje

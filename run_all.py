@@ -137,6 +137,10 @@ def create_cnn_model(arch, num_classes):
     channel to 3). This keeps the original 3-channel conv1 with pretrained
     weights instead of replacing it with a 1-channel averaged version.
     From-scratch models use input_channels=1 (raw grayscale images).
+    NOTE (professor-validation 9.1, 2026-09-03): pretrained vs from-scratch
+    ResNet therefore differ in BOTH weight init and input representation
+    (3ch + ImageNet norm vs 1ch raw gray); any delta is a combined effect
+    and must not be attributed to pretraining alone.
     """
     if arch == 'shallow':
         from src.models.shallow_cnn import ShallowCNN

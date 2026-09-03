@@ -306,6 +306,13 @@ in weight init. Concretely:
   single-channel images" — a professor would still press for the controlled
   version, and the delta figure loses its core meaning.
 
+  **RESOLUTION (2026-09-03):** decision — KEEP the 1-channel raw-gray
+  from-scratch ResNet. No code change, no rerun; claims were rephrased
+  instead: draft §3.3, §5.7, §6.3/Slika 6.1 now state the delta is the
+  COMBINED effect of pretraining and input representation, and
+  `run_all.py::create_cnn_model` carries the same caveat in its docstring.
+  Watchlist item 1 is updated accordingly.
+
 ### 9.2 FINDING 2 — MEDIUM (already documented): one split, no variance
 Single 70/10/20 split, one seed; all methods share it (fair), but no
 mean±std, so small deltas cannot be distinguished from noise. Draft has this
@@ -356,9 +363,11 @@ limitation note.
   it honestly, so no code change required.
 
 ### 9.7 Expected-results watchlist (what to check the moment the run finishes)
-1. If resnet beats resnet_scratch by a large margin BEFORE Finding 1 is fixed,
-   the margin must NOT be attributed to pretraining (confound) — re-run the 12
-   scratch cells after the fix.
+1. Any resnet-vs-resnet_scratch margin (per the 2026-09-03 rephrase decision)
+   is the COMBINED effect of pretraining and input representation (3ch+norm
+   vs 1ch gray). Report the delta as such; never attribute its magnitude to
+   pretraining alone, and do not claim a clean transfer-learning effect.
+
 2. Adult income: watch for any CNN pinned near the ~75/25 prior (acc ≈ 0.75
    with F1 near 0) — a symptom, not a result; class weights + report cards
    should prevent it, but verify each cell's final val loss is below ~0.69
@@ -375,7 +384,8 @@ limitation note.
 
 ### 9.8 Verdict (supersedes section 8)
 Methodology is sound and the fixes documented in PART 15 made the pipelines
-fair. One claim currently exceeds what the code supports: the clean
-pretraining-effect decomposition (9.1). Fix that one confound before the
-36-cell run is treated as final; everything else is an acceptable, documented
-limitation for a seminar and must simply be stated as such in the text.
+fair. One claim exceeded what the code supports — the clean
+pretraining-effect decomposition (9.1). Resolved 2026-09-03 by rephrasing
+every affected claim to a combined effect (no code change, no rerun).
+Everything else is an acceptable, documented limitation for a seminar and
+must simply be stated as such in the text.
