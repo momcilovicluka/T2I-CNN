@@ -1,21 +1,28 @@
 """
 Master script to run all experiments for Chapter 4.
 
-Runs 48 CNN experiments (4 T2I x 3 datasets x 4 architectures)
+Default grid: 36 CNN experiments (4 T2I x 3 datasets x 3 architectures)
 + 9 tabular baselines (RF, XGBoost, MLP x 3 datasets)
-= 57 total experiments.
+= 45 total experiments.
 
 NOTE (2026-09-03): s_igtd was dropped from the study — its wrapper
 computed the supervised between-group distance but never fed it to
 the layout optimizer, so its images were bit-identical to igtd's
 (probe-verified). See Plan/paper-statement-guide.md PART 13i.
 
+NOTE (2026-09-03): ViT-Base/16 is excluded from the DEFAULT grid — at
+~15 s/epoch on GPU and ~830 s/epoch on CPU it is not runnable without
+GPU time (free Colab GPU was lost). Re-add it any time with
+`--archs shallow,resnet,resnet_scratch,vit`; ARCH_LR['vit'] = 1e-4
+remains the correct LR (probe-verified, see ARCH_LR comment).
+
 Usage:
-    python run_all.py                        # All 69 experiments
-    python run_all.py --dataset breast_cancer # One dataset only
-    python run_all.py --baselines           # Just the 9 tabular baselines
-    python run_all.py --cnn-only            # Just the 60 CNN experiments
-    python run_all.py --dry-run             # Print what would run, don't train
+    python run_all.py                          # All 45 experiments
+    python run_all.py --dataset breast_cancer  # One dataset only
+    python run_all.py --archs shallow,resnet,vit  # Override architectures
+    python run_all.py --baselines              # Just the 9 tabular baselines
+    python run_all.py --cnn-only               # Just the CNN experiments
+    python run_all.py --dry-run                # Print what would run, don't train
 """
 
 import itertools
@@ -31,7 +38,12 @@ import torch
 
 DATASETS = ['breast_cancer', 'dry_bean', 'adult_income']
 T2I_METHODS = ['naive', 'tinto', 'deepinsight', 'igtd']
-CNN_ARCHITECTURES = ['shallow', 'resnet', 'resnet_scratch', 'vit']
+# Default grid runs CPU-feasible architectures only. ViT-Base/16 (pretrained)
+# is kept out of the default (2026-09-03): not runnable without GPU time
+# (~830 s/epoch on CPU vs ~15 s/epoch on GPU). Re-add with
+# `--archs shallow,resnet,resnet_scratch,vit`.
+CNN_ARCHITECTURES = ['shallow', 'resnet', 'resnet_scratch']
+ALL_ARCHITECTURES = CNN_ARCHITECTURES + ['vit']
 BASELINE_MODELS = ['rf', 'xgboost', 'mlp']
 
 # Dataset-specific configurations
@@ -421,6 +433,11 @@ def main():
                         help='Run only tabular baselines')
     parser.add_argument('--dataset', type=str, default=None,
                         help='Run for one dataset only')
+    parser.add_argument('--archs', type=str, default=None,
+                        help='Comma-separated CNN architectures to run '
+                             '(default: %s; add vit to re-include ViT-Base/16, '
+                             'e.g. "shallow,resnet,resnet_scratch,vit")'
+                             % ','.join(CNN_ARCHITECTURES))
     parser.add_argument('--dry-run', action='store_true',
                         help='Print what would run, do not train')
     parser.add_argument('--aggregate', action='store_true',
@@ -444,7 +461,14 @@ def main():
     run_cnn = not args.baselines
 
     if run_cnn:
-        combos = list(itertools.product(DATASETS, T2I_METHODS, CNN_ARCHITECTURES))
+        archs = CNN_ARCHITECTURES
+        if args.archs:
+            archs = [a.strip() for a in args.archs.split(',') if a.strip()]
+            unknown = [a for a in archs if a not in ALL_ARCHITECTURES]
+            if unknown:
+                sys.exit(f"Unknown architecture(s): {unknown}. "
+                         f"Valid: {ALL_ARCHITECTURES}")
+        combos = list(itertools.product(DATASETS, T2I_METHODS, archs))
         if args.dataset:
             combos = [(d, t, c) for d, t, c in combos if d == args.dataset]
 

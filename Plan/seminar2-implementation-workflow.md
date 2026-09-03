@@ -73,7 +73,7 @@ pip install torch torchvision timm tintolib scikit-learn xgboost \
    - CSV: `DryBeanDataset/Dry_Bean_Dataset.csv`
 
 3. **Adult Income** — UCI / Kaggle
-   - ~48,000 samples, 14 features (6 categorical + 8 numerical), binary
+   - ~48,000 samples, 14 features (8 categorical + 6 numerical), binary
    - Download from: https://archive.ics.uci.edu/ml/datasets/Adult
 
 4. For each dataset, create a profiling notebook:
@@ -701,7 +701,7 @@ python src/visualize.py  # Generate all figures
 | Adult Income | igtd | resnet | Transfer learning |
 | Adult Income | igtd | vit | Transfer learning |
 
-Total: 48 CNN experiments (4 T2I x 3 datasets x 4 architectures) + 9 baselines (RF, XGBoost, MLP) = 57 experiments. (s_igtd dropped 2026-09-03 — duplicated IGTD, guide PART 13i; earlier references to 60/69 and 5 T2I methods are superseded.)
+Total: 36 CNN experiments (4 T2I x 3 datasets x 3 architectures) + 9 baselines (RF, XGBoost, MLP) = 45 experiments. (s_igtd dropped 2026-09-03 — duplicated IGTD, guide PART 13i; ViT deferred 2026-09-03 — GPU required, guide PART 14; grid grows to 48+9=57 only if ViT is re-added via `--archs ...vit`; earlier references to 60/69, 5 T2I methods and a 4-arch default are superseded.)
 
 ---
 
@@ -711,7 +711,7 @@ Total: 48 CNN experiments (4 T2I x 3 datasets x 4 architectures) + 9 baselines (
 
 2. **Why label smoothing (0.1)**: Reduces overconfident predictions, improves generalization on small datasets. Especially important for breast cancer (398 samples). (Literature: Concern 10)
 
-3. **Why class weights**: Inverse-frequency weighting prevents majority-class bias. Dry Bean 6.6:1 imbalance would otherwise inflate accuracy. (Concern 7)
+3. **Why class weights**: Inverse-frequency weighting prevents majority-class bias. Dry Bean 6.8:1 imbalance would otherwise inflate accuracy. (Concern 7)
 
 4. **Why macro-F1 over accuracy**: Accuracy is misleading with class imbalance. Macro-F1 gives equal weight to all classes. (Concern 7)
 
@@ -771,7 +771,7 @@ Total: 48 CNN experiments (4 T2I x 3 datasets x 4 architectures) + 9 baselines (
 - Implement TINTO wrapper (src/t2i/tinto.py) — ~30 lines, same pattern as deepinsight.py
 - ~~Implement S-IGTD wrapper (src/t2i/s_igtd.py)~~ — DONE then DROPPED (2026-09-03): wrapper duplicated IGTD (supervised distance unused); excluded from the study, module kept as reference (guide PART 13i)
 - Add overlap diagnostics (OF/OP metrics) to T2I pipeline
-- Checkpoint 4: Run all experiments (60 CNN configs + 9 baselines)
+- Checkpoint 4: Run all experiments (default 2026-09-03: 36 CNN configs + 9 baselines = 45; 57 with ViT re-added via `--archs ...vit`)
 - Checkpoint 5: Generate comparison tables and figures
 - Checkpoint 6: Write the paper
 
@@ -796,6 +796,7 @@ statements in `Plan/paper-statement-guide.md` PART 9.
 | 10 | Resume treated any existing file as done, even corrupt/truncated JSON | 🟡 Resume | _experiment_is_done(): file parses as JSON with dataset + f1_macro keys | 70b72c3 |
 | 11 | Pretrained ViT fine-tuned at shared lr=1e-3 diverges on T2I images — train loss pinned at log(2), val acc at priors, F1~0 | 🔴 CRITICAL (result validity) | Per-arch LR: ARCH_LR vit=1e-4, others 1e-3; probe: 0.91 val acc by epoch 5; LR persisted in each result JSON | defb6fb |
 | 12 | Ablation direct-FT ResNet trained at lr=1e-4 while main table resnet row uses 1e-3 — ablation figure would contradict the results table (0.935 vs 0.9722 on breast_cancer/deepinsight) | 🟡 Figure/table consistency | ablation.py imports ARCH_LR for all train sites (direct-FT resnet, pixel-shuffle, feature-ordering) | 3df3e17 |
+| 13 | ViT-Base/16 deferred from the default grid (2026-09-03): free GPU lost; ~830 s/epoch on CPU vs ~15 s/epoch on GPU — not runnable without GPU time. Does NOT reduce the core scope: transfer-vs-scratch (RQ2) is answered by resnet vs resnet_scratch; ablation/Grad-CAM never used ViT | 🟡 Scope (compute) | Default grid = 36 CNN + 9 baselines = 45; `--archs shallow,resnet,resnet_scratch,vit` re-adds ViT; ARCH_LR['vit']=1e-4 retained. Paper: ViT → future work | (see PART 14) |
 
 **IMPORTANT:** Any results produced before these fixes with pretrained
 models (resnet, vit) or baselines are INVALID. Re-run everything after
@@ -814,3 +815,10 @@ before 3df3e17 is INVALID — its direct-FT ResNet cell trained at the
 wrong LR (1e-4 vs main-table 1e-3). Re-run the ablation study after
 the main suite finishes. See PART 12b of paper-statement-guide for why
 the LR change is NOT extended to ResNet-18 or from-scratch models.
+
+**Additionally (2026-09-03, ViT deferred):** with ViT out of the default
+grid, none of the PART 12 ViT re-run instructions apply anymore. The
+12 ViT cells are only produced when explicitly requested with
+`--archs shallow,resnet,resnet_scratch,vit` on a GPU runtime. Any
+`*_vit.json` still trained with lr != 1e-4 remains INVALID (row 11).
+See paper-statement-guide PART 14.

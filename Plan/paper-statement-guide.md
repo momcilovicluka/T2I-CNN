@@ -11,7 +11,7 @@ and what code/decision it references.
 
 ### 1.1 Single Split Without Cross-Validation
 **Write:** "Experiments used a single stratified train/val/test split
-(80/10/10) with fixed random seed. Results were not validated with
+(70/10/20 — train 70%, val 10%, test 20%) with fixed random seed. Results were not validated with
 k-fold cross-validation or multiple random splits."
 
 **Why:** A single split could produce results that are specific to
@@ -70,8 +70,8 @@ but also prevent each method from reaching its best performance.
 
 ### 1.4 Architecture Capacity Mismatch
 **Write:** "CNN architectures vary substantially in capacity:
-shallow CNN (~200K parameters), ResNet-18 (~11M parameters, 55x more),
-ViT-base (~86M parameters, 430x more). Results reflect the interaction
+shallow CNN (~620K parameters, measured 618,178), ResNet-18 (~11M
+parameters, ~18x more), ViT-base (~86M parameters, ~140x more). Results reflect the interaction
 between T2I method and model capacity, not T2I method alone."
 
 **Why:** A more powerful model may extract useful patterns from even
@@ -123,7 +123,7 @@ relationships. This is a fundamental limitation of the input resolution.
 
 ### 2.1 Preprocessing
 **Write:** "All datasets were preprocessed with stratified train/val/test
-splits (80/10/10) and StandardScaler normalization (fit on training data
+splits (70/10/20) and StandardScaler normalization (fit on training data
 only). For Adult Income, the official UCI train/test split was combined
 and re-split to ensure stratification."
 
@@ -135,21 +135,26 @@ StandardScaler on train only prevents data leakage.
 - `src/preprocessing.py` lines 198-213: Adult Income re-split
 
 ### 2.2 T2I Methods
-**Write:** "Three tabular-to-image methods were implemented:
+**Write:** "Four tabular-to-image methods were implemented:
 (1) Naive Reshape — pad features to next perfect square, resize to
 32×32 with bicubic interpolation, normalize to [0,1] using training
-min/max; (2) DeepInsight — TINTOlib implementation using t-SNE for
-feature-to-pixel coordinate mapping; (3) IGTD — TINTOlib implementation
-using rank-based permutation to match feature and pixel distance
-rankings. All methods produce 32×32 single-channel grayscale images
-normalized to [0,1]."
+min/max; (2) DeepInsight — TINTOlib implementation using PCA for
+feature-to-pixel coordinate mapping; (3) TINTO — DeepInsight-style PCA
+projection plus Gaussian blur around each feature's pixel; (4) IGTD —
+TINTOlib implementation using rank-based permutation to match feature
+and pixel distance rankings. All methods produce 32×32 single-channel
+grayscale images normalized to [0,1]."
 
 **Why:** Must describe each method precisely so results are reproducible.
 
 **References:**
 - `src/t2i/naive.py`: bicubic resize, train min/max normalization
 - `src/t2i/deepinsight.py`: TINTOlib DeepInsight wrapper
+- `src/t2i/tinto.py`: TINTOlib TINTO wrapper, train-derived [0,1] rescale
 - `src/t2i/igtd.py`: TINTOlib IGTD wrapper, /255.0 normalization
+
+(Note: s_igtd was dropped from the study — its wrapper duplicated IGTD,
+PART 13i.)
 
 ### 2.3 Class Imbalance Handling
 **Write:** "Class imbalance was handled with inverse-frequency class
@@ -157,7 +162,7 @@ weights in the cross-entropy loss (sklearn compute_class_weight
 with 'balanced' mode). Primary evaluation metric was macro-F1, which
 gives equal weight to all classes regardless of frequency."
 
-**Why:** Dry Bean has 6.6:1 imbalance, Adult Income 3.2:1. Without
+**Why:** Dry Bean has 6.8:1 imbalance, Adult Income 3.2:1. Without
 class weights, models default to majority class. Macro-F1 prevents
 inflated accuracy metrics.
 
@@ -340,7 +345,7 @@ sufficient spatial tokens for self-attention mechanisms."
 
 **SUPERSEDED for the final protocol (2026-09-03, PART 13h):**
 cross_validate() is implemented but never invoked. The main results
-use the single fixed 80/10/10 split (PART 1.1). Do NOT copy the 7e
+use the single fixed 70/10/20 split (PART 1.1). Do NOT copy the 7e
 paper statement ("All experiments were evaluated using stratified
 5-fold cross-validation") into the paper — it is false.
 
@@ -578,7 +583,7 @@ calls `preprocess_dataset()` with these defaults, so all methods see
 the identical split of each dataset.**
 
 **Paper statement:** "Each dataset was split once into stratified
-train/val/test partitions (80/10/10) with a fixed random seed, and all
+train/val/test partitions (70/10/20) with a fixed random seed, and all
 methods — CNNs and tabular baselines — were trained and evaluated on
 these identical partitions."
 
@@ -916,7 +921,7 @@ marked not-applicable.
 |---|---|
 | epochs=50, batch=32, wd=1e-4, patience=15, smoothing=0.1, scheduler (factor=0.5, patience=5), Adam | PART 1.3/2.4/11.4; workflow CP4.5 rows 5-6 |
 | ARCH_LR (vit 1e-4, others 1e-3) | PART 12; run_all.py comment on ARCH_LR |
-| Splits 80/10/10 stratified, seed 42, StandardScaler train-only | PART 11.1; preprocessing.py |
+| Splits 70/10/20 stratified, seed 42, StandardScaler train-only | PART 11.1; preprocessing.py |
 | Seeds 42 (global + TINTOlib) | PART 6/11.2; code |
 | Class weights 'balanced' (sklearn) | PART 2.3; train.py comment |
 | Metric family (acc, prec/rec/F1, ROC/PR-AUC, confusion) | PART 2.3/3.1; caveat in 13e |
@@ -930,3 +935,43 @@ marked not-applicable.
 | Dataset selection | chapter4-plan 4.1.1; professor-validation Sec. 7 |
 | Baselines train on X_train only | PART 9b/11.3; run_all.py comment |
 | Atomic writes + parse-validating resume | PART 10c/10d |
+
+---
+
+## PART 14: ViT-Base/16 deferred from the default grid (2026-09-03)
+
+**Trigger:** free Colab GPU quota was exhausted and results were lost;
+ViT-Base/16 measures ~830 s/epoch on CPU vs ~15 s/epoch on GPU — not
+runnable without GPU time (an adult_income ViT cell alone would take
+days on CPU).
+
+**Change:** `run_all.py` default grid is now **36 CNN experiments
+(4 T2I × 3 datasets × 3 architectures) + 9 baselines = 45**. ViT is
+re-addable at any time with `--archs shallow,resnet,resnet_scratch,vit`
+(commit for this change; `ARCH_LR['vit'] = 1e-4` is retained and
+remains the correct LR — PART 12). `src/visualize.py` keeps its `vit`
+color/marker/label entries so re-added ViT results plot automatically.
+
+**Why the scope is NOT reduced:** the professor's proposal (CNN + T2I,
+"poređenje transfer learning-a sa nekim lokalno istreniranim") is fully
+covered by `resnet` (pretrained) vs `resnet_scratch` (same architecture
+from scratch) — the only matched-architecture controlled transfer
+comparison. RQ2 in the draft is answered without ViT. Ablation study
+and Grad-CAM never used ViT (`ablation.py`, `gradcam.py` have zero ViT
+references). ViT contributed only breadth to RQ4 (capacity factor) and
+was already confounded as a cross-architecture pretrained comparison
+(§1.4 capacity framing).
+
+**Paper statement (Serbian draft and results):** write "tri arhitekture
+različitog kapaciteta" for the main study; ViT is mentioned in §2/§3 as
+a transformer baseline evaluated in pilot form during validation but
+excluded from the final protocol for computational reasons (no GPU
+time), with the lr=1e-4 finding (PART 12) noted as groundwork for
+future work. Do NOT write that ViT results are part of the comparison
+tables while ViT is out of the grid.
+
+**Effect on results:** no ViT results exist yet (nothing re-run since
+the GPU loss), so nothing else is invalidated by this decision. If ViT
+is re-added later, only its own 12 cells need GPU time; all other fixes
+(0e20179, 99432a1, 43210f4, 70b72c3, defb6fb, 3df3e17) are already in
+local code and remain mandatory before any run is written up.

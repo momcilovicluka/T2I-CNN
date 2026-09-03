@@ -9,7 +9,11 @@ and **no 5-fold CV** (LP-FT/CV exist only as unused code; PART 13h).
 (3) Image size is **fixed 32x32 for every method/dataset** — adaptive
 sizing was not adopted (PART 13f). (4) "F1" is macro only for dry_bean;
 for the two binary datasets it is positive-class F1 — label honestly
-(PART 13e).
+(PART 13e). (5) ViT-Base/16 is DEFERRED from the default grid
+(2026-09-03, GPU loss): default run is now **36 CNN (4 T2I x 3
+datasets x 3 archs) + 9 baselines = 45**. Re-add ViT any time with
+`--archs shallow,resnet,resnet_scratch,vit` (ARCH_LR['vit']=1e-4
+retained; paper-statement-guide PART 14).
 
 ## Plan for Seminar Paper — Chapter 4
 
@@ -24,7 +28,7 @@ for the two binary datasets it is positive-class F1 — label honestly
 | Dataset | Samples | Features | Classes | Imbalance | Split (Train/Val/Test) |
 |---------|---------|----------|---------|-----------|----------------------|
 | Breast Cancer Wisconsin | 569 | 30 | 2 (malignant/benign) | 1.7:1 | 398/57/114 |
-| Dry Bean | 13,611 | 16 | 7 | 6.6:1 | 9,527/1,361/2,723 |
+| Dry Bean | 13,611 | 16 | 7 | 6.8:1 | 9,527/1,361/2,723 |
 | Adult Income | 48,842 | 108 (after encoding) | 2 (≤50K/>50K) | 3.2:1 | 34,188/4,885/9,769 |
 
 **Text to write:**
@@ -95,7 +99,7 @@ for the two binary datasets it is positive-class F1 — label honestly
 
 **Text to write:**
 - Justify each hyperparameter choice
-- Explain class weighting: Dry Bean has 6.6:1 imbalance, without weights majority-class classifier gets 26% accuracy (random-level)
+- Explain class weighting: Dry Bean has 6.8:1 imbalance, without weights majority-class classifier gets 26% accuracy (random-level)
 - Explain macro-F1: accuracy is misleading with imbalance (Adult Income: majority class = 76.1%)
 - State: "Hyperparameters were fixed across all experiments to ensure fair comparison"
 
@@ -131,7 +135,7 @@ for the two binary datasets it is positive-class F1 — label honestly
 ### 4.1.6 Evaluation Protocol
 
 **Text to write:**
-- Single stratified 80/10/10 split (train/val/test)
+- Single stratified 70/10/20 split (train/val/test)
 - Early stopping on validation loss
 - Final evaluation on held-out test set
 - Metrics: Accuracy, Macro-F1, Precision, Recall, ROC-AUC, PR-AUC

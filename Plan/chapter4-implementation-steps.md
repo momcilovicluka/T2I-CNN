@@ -3,8 +3,11 @@
 > **STATUS 2026-09-03:** STEP 2 (S-IGTD wrapper) was later DROPPED from
 the study — its supervised distance was never used, so it duplicated
 IGTD (paper-statement-guide PART 13i). Final method set: naive, TINTO,
-DeepInsight, IGTD. Experiment counts below (60/69) are superseded by
-48 CNN + 9 baselines = 57.
+DeepInsight, IGTD. ViT-Base/16 was also DEFERRED from the default grid
+(2026-09-03, GPU loss — ~830 s/epoch on CPU; paper-statement-guide
+PART 14). Experiment counts below (60/69) are superseded by
+**36 CNN + 9 baselines = 45** (48/57 only if ViT is re-added via
+`--archs shallow,resnet,resnet_scratch,vit`).
 
 Split into 7 independent steps. Each produces working, testable code.
 Step 0 updates existing code before anything new.
@@ -187,7 +190,7 @@ print(f"RF F1: {result['f1_macro']:.4f}")
 ---
 
 ## STEP 5: Build Experiment Runner (run_all.py)
-**Goal:** Automated pipeline for all 69 experiments.
+**Goal:** Automated pipeline for the full grid (currently 45 experiments: 36 CNN + 9 baselines; 57 if ViT is re-added).
 **Time:** ~45 min
 **Dependencies:** Steps 0-4
 
@@ -214,7 +217,7 @@ print(f"RF F1: {result['f1_macro']:.4f}")
 
 ### Command line:
 ```bash
-python run_all.py                        # All 69 experiments
+python run_all.py                        # All 45 experiments (36 CNN + 9 baselines)
 python run_all.py --dataset breast_cancer # One dataset only
 python run_all.py --baselines           # Just the 9 baselines
 python run_all.py --dry-run             # Print what would run, don't train
@@ -223,7 +226,7 @@ python run_all.py --dry-run             # Print what would run, don't train
 ### Validation:
 ```bash
 python run_all.py --dry-run
-# Should print: "Would run 60 CNN experiments + 9 baselines"
+# Should print: "Would run 36 CNN experiments..." (ViT only with --archs ...vit)
 ```
 
 ### Files created/modified: 1 (run_all.py)

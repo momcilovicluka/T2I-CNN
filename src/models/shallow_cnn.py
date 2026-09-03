@@ -8,7 +8,7 @@ Architecture:
     -> Conv2d(64, 128, 3) -> BN -> ReLU -> AdaptiveAvgPool(4)
     -> Flatten -> Linear(128*4*4, 256) -> ReLU -> Dropout(0.3) -> Linear(256, num_classes)
 
-~200K parameters. This is the "fair" baseline — no pretrained features,
+~620K parameters (measured 618,178). This is the "fair" baseline — no pretrained features,
 no architectural advantages. If DeepInsight outperforms naive on this
 model, it proves the T2I method matters, not the CNN capacity.
 

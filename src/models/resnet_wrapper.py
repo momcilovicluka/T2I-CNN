@@ -9,7 +9,7 @@ WHY ResNet-18:
 - Standard architecture for image classification benchmarks
 - Residual connections enable training deeper networks
 - Well-studied in transfer learning literature
-- ~11M parameters (55x more than ShallowCNN)
+- ~11M parameters (measured 11,177,538; ~18x more than ShallowCNN's 618,178)
 
 WHY from-scratch option:
 - Without it, ResNet advantages could come from pretrained features,

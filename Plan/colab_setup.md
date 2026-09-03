@@ -26,7 +26,12 @@ else:
 ## Cell 3: Run all experiments
 
 ```python
-# Run all 69 experiments (~1-2 hours on Colab T4/A100)
+# Default grid (2026-09-03): 36 CNN (4 T2I x 3 datasets x 3 archs)
+# + 9 baselines = 45 experiments. ViT-Base/16 is DEFERRED (needs GPU,
+# ~830 s/epoch on CPU); re-add only on a GPU runtime with:
+#   !python run_all.py --archs shallow,resnet,resnet_scratch,vit
+# CPU runtime: run in a terminal with nohup and re-attach, or keep this
+# cell running and re-run to resume after disconnects (resume support).
 !python run_all.py
 ```
 
@@ -71,13 +76,18 @@ print(f"\nMacro-F1 by T2I method and dataset:")
 print(df.pivot_table(index=['dataset', 't2i_method'], columns='cnn_arch', values='f1_macro').round(4).to_string())
 ```
 
-## Expected runtime on Colab
+## Expected runtime (2026-09-03, ViT deferred)
 
-| Dataset | Time (T4) | Time (A100) |
-|---------|-----------|-------------|
-| Breast Cancer | ~10 min | ~3 min |
-| Dry Bean | ~30 min | ~10 min |
-| Adult Income | ~1-2 hours | ~30 min |
-| All 69 experiments | ~1.5-2 hours | ~45 min |
-| Figures + Ablation | ~15 min | ~10 min |
-| **Total** | **~2-2.5 hours** | **~1 hour** |
+| Dataset | CPU (laptop) | CPU (Colab) | GPU (T4, if ViT re-added) |
+|---------|-------------|-------------|--------------------------|
+| Breast Cancer (12 CNN cells) | ~3 min | ~15 min | ~2 min |
+| Dry Bean (12 CNN cells) | ~40-60 min | ~2-3 h | ~10 min |
+| Adult Income (12 CNN cells) | ~2-3 h | ~5-8 h | ~30 min |
+| 9 baselines | ~15 min | ~40 min | ~15 min |
+| All 45 experiments | **~3.5-5 h** | **~8-12 h** | ~1 h |
+| ViT only (12 cells, re-added) | days (not feasible) | days | ~2-3 h |
+| Figures + Ablation | ~15 min | ~15 min | ~10 min |
+
+Runtime estimates for dry_bean/adult are extrapolated from measured
+breast_cancer CPU epochs (shallow ~0.1 s, resnet ~0.3 s,
+resnet_scratch ~0.4 s per epoch at 32x32).

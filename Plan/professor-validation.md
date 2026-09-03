@@ -69,7 +69,7 @@ that hyperparameters were not tuned per method.
 ## 3. Metric Validity
 
 ### ✅ PASS: Macro-F1 as Primary Metric
-Correctly handles class imbalance. Dry Bean (6.6:1) and Adult Income
+Correctly handles class imbalance. Dry Bean (6.8:1) and Adult Income
 (3.2:1) would inflate accuracy if accuracy were the only metric.
 
 ### ✅ PASS: Multiple Metrics Reported
@@ -149,7 +149,7 @@ slightly across platforms.
 ## 6. Model Architecture Concerns
 
 ### ⚠️ CONCERN: Shallow CNN vs ResNet-18 Capacity Mismatch
-Shallow CNN: ~200K parameters
+Shallow CNN: ~620K parameters (measured 618,178)
 ResNet-18: ~11M parameters
 
 **Professor would ask:** "Are you comparing T2I methods or model

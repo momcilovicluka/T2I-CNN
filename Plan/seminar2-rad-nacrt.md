@@ -47,11 +47,13 @@ jezgra „vide“. Naivno rešenje (redom pakovati atribute u mrežu) ne koristi
 informaciju o povezanosti atributa, dok naprednije metode pokušavaju da u prostor
 slike prenesu **statističku strukturu podataka**: slični (korelisani) atributi
 završavaju na susednim pozicijama, a različiti na udaljenim. U radu se upoređuje
-pet reprezentativnih postupaka ove vrste — od naivnog pakovanja, preko
-projekcionih metoda (DeepInsight, TINTO) do permutacionih metoda zasnovanih na
-rangovima rastojanja (IGTD) — na tri heterogena skupa podataka i sa četiri
-konvolucione arhitekture različitog kapaciteta, uključujući i modele sa
-transfer učenjem (pretrenirane mreže na ImageNet-u).
+četiri reprezentativna postupka ove vrste — naivno pakovanje, projekcione
+metode (DeepInsight, TINTO) i permutaciona metoda zasnovana na rangovima
+rastojanja (IGTD) — na tri heterogena skupa podataka i sa **tri
+konvolucione arhitekture različitog kapaciteta**, uključujući modele sa
+transfer učenjem (pretrenirani ResNet-18). Tokom validacije protokola
+testiran je i pretrenirani ViT-Base/16, ali on nije deo glavne serije
+eksperimenata iz računskih razloga (zahteva GPU vreme; §3.3, §4.4, §7).
 
 Cilj rada je da se odgovori na sledeća istraživačka pitanja:
 
@@ -160,10 +162,13 @@ nultih vrednosti.
 ### 3.2.2 DeepInsight
 
 DeepInsight [1] preslikava atribute u ravan primenom algoritma smanjenja
-dimenzionalnosti (u ovom radu PCA, preko TINTOlib-a) nad **atributima kao
-tačkama**: polazi se od matrice korelacija $C_{ij} = \mathrm{corr}(X_i, X_j)$,
-odnosno rastojanja $1 - |C_{ij}|$, koja se ugrađuju u 2D koordinate
-$p_i \in \mathbb{R}^2$. Koordinate se zatim skaliraju u opseg mreže piksela, a
+dimenzionalnosti nad **atributima kao tačkama**: atribute (kolone) tretiramo
+kao tačke u prostoru uzoraka, pa se na transponovanu matricu primenjuje PCA
+(glavne komponente, u TINTOlib implementaciji korišćenoj u ovom radu) i dobijaju
+dvodimenzione koordinate $p_i \in \mathbb{R}^2$. Kako su podaci pre toga
+standardizovani po atributima, geometrija koordinata odražava (korelacionu)
+strukturu linearnih veza među atributima, pa korelisani atributi završavaju
+blizu jedan drugog. Koordinate se zatim skaliraju u opseg mreže piksela, a
 svaki atribut dobija svoj piksel. Kako više atributa može da padne u istu ćeliju,
 definiše se tzv. matrica gustine karakteristika (Feature Density Matrix — FDM);
 pikseli sa više atributa čuvaju **srednju** vrednost (grupa „avg”), što je
@@ -178,7 +183,8 @@ gubitna kompresija. Zato se uvode dijagnostičke mere:
 
 IGTD [2] ne koristi projekciju. Neka su $D_F$ i $D_P$ matrice rastojanja:
 $D_F(i,j)$ — rastojanje između atributa $i$ i $j$ (Pearson-ova korelacija
-pretvorena u rastojanje, u ovom radu $1 - |\rho|$), a $D_P(i,j)$ — Euklidovo
+pretvorena u rastojanje, u ovom radu $1 - \rho$, kako je implementirano u
+TINTOlib-u), a $D_P(i,j)$ — Euklidovo
 rastojanje između pozicija u mreži piksela. Za obe matrice računaju se matrice
 **rangova** $R_F$ i $R_P$ (svako rastojanje dobija svoj rang među svim parovima).
 Cilj je pronaći permutaciju atributa po pozicijama koja minimizuje Frobenijusovu
@@ -254,13 +260,21 @@ normalizacijom) i od nule (`pretrained=False`, ulaz 1 kanal — siva slika).
 Ova dva režima razdvajaju efekat **kapaciteta** od efekta **pretreniranosti**.
 
 **ViT-Base/16** — Vision Transformer, ~86M parametara, patch veličine 16.
-Slika $32\times32$ se bikubičnom interpolacijom skalira na $224\times224$
+Slika $32\times32$ se bilinearnom interpolacijom skalira na $224\times224$
 (196 tokena), svaki token je linearna projekcija $16\times16$ bloka uvećana
 pozicionim enkodingom, a jezgro mreže je višeglavi self-attention:
 
 $$
 \mathrm{Attention}(Q,K,V) = \mathrm{softmax}\!\left(\frac{QK^{\mathsf{T}}}{\sqrt{d_k}}\right) V .
 $$
+
+> **Napomena o obuhvatu studije (2026-09-03):** pretrenirani ViT-Base/16
+> korišćen je tokom validacije protokola (otkrio je zavisnost od stope
+> učenja opisanu u §3.4), ali nije deo glavne serije eksperimenata:
+> fino podešavanje zahteva GPU vreme (~15 s po epohi na GPU naspram
+> ~830 s na CPU), a rezultati sa GPU okruženja su izgubljeni.
+> Rezultatske tabele u §6 pokrivaju tri arhitekture; ViT se u matricu
+> vraća komandom `--archs shallow,resnet,resnet_scratch,vit`.
 
 ## 3.4 Transfer learning i protokol treninga
 
@@ -273,7 +287,7 @@ pretrenirani modeli su kolabirali na predviđanje jedne klase; listing 5.6).
 
 Funkcija gubitka je unakrsna entropija sa:
 - **klasnim težinama** (inverzna učestanost klasa, sklearn `compute_class_weight`
-  sa `'balanced'`) — kompenzacija disbalansa (Dry Bean ~6,6:1, Adult ~3,2:1);
+  sa `'balanced'`) — kompenzacija disbalansa (Dry Bean ~6,8:1, Adult ~3,2:1);
 - **label smoothing** $\varepsilon = 0{,}1$ — omekšavanje ciljnih raspodela radi
   manje samouverenih predikcija i bolje generalizacije; primenjeno uniformno na
   svim skupovima radi uporedivosti protokola.
@@ -290,9 +304,11 @@ trenirani su istom stopom $10^{-3}$. Pokazalo se da pretrenirani ViT pri
 $10^{-3}$ **ne može da nauči ni trening skup** (gubitak zaključan na
 $\log 2 \approx 0{,}698$ — odgovara uniformnim predikcijama), dok pri
 $10^{-4}$ (uobičajeni opseg za fino podešavanje ViT-a) isti model uči normalno.
-Zato finalni protokol koristi $lr_{ViT} = 10^{-4}$, a za sve ostale arhitekture
+Zato protokol za ViT predviđa $lr_{ViT} = 10^{-4}$, a za sve ostale arhitekture
 $10^{-3}$ — odluka zasnovana na kriterijumu „obučljivosti“, ne na pogađanju
 performansi (detalji i dokazni eksperiment u PART 12 priručnika; listing 5.8).
+Pošto ViT nije u glavnoj seriji (§3.3), rezultatske tabele pokrivaju tri
+arhitekture, a ovaj nalaz ostaje kao osnova za budući rad.
 **Unutar svake arhitekture stopa je ista za sve T2I metode**, pa poređenje
 metoda ostaje nekontaminirano.
 
@@ -342,8 +358,8 @@ atributa, izbalansiran i disbalansiran raspored klasa (Tabela 4.1).
 | Skup | Primeraka | Atributa (posle kodiranja) | Klasa | Napomena |
 |---|---|---|---|---|
 | Breast Cancer Wisconsin [7] | 569 | 30 | binarna | ~63:37 (benigni:maligni); svi numerički |
-| Dry Bean [8] | ~13.611 | 16 | 7 klasa | najveći disbalans ~6,6:1; svi numerički |
-| Adult Income [9] | ~48.842 | ~108 (one-hot) | binarna | 6 kategoričkih + 8 numeričkih; ~76:24 |
+| Dry Bean [8] | ~13.611 | 16 | 7 klasa | najveći disbalans ~6,8:1; svi numerički |
+| Adult Income [9] | ~48.842 | ~108 (one-hot) | binarna | 8 kategoričkih + 6 numeričkih; ~76:24 |
 
 Priprema je zajednička za sve metode i modele:
 
@@ -351,7 +367,8 @@ Priprema je zajednička za sve metode i modele:
    podela train/test se spaja i ponovo deli (radi stratifikacije), bez curenja.
 2. Redovi sa nedostajućim vrednostima uklanjaju se pre kodiranja.
 3. Podaci se dele **stratifikovano** na trening/validaciju/test u odnosu
-   80/10/10, fiksiranim semenom 42; **ista podela koristi se za sve metode**
+   70/10/20 (test 20% a validacija 10% celog skupa), fiksiranim semenom 42;
+   **ista podela koristi se za sve metode**
    (CNN-e, baselajne i ablacije).
 4. `StandardScaler` se fituje **isključivo na trening** delu i primenjuje na
    validaciju i test.
@@ -363,10 +380,12 @@ validacionih/test primera).
 
 ## 4.2 Dizajn eksperimenata
 
-Eksperimentalna matrica obuhvata **4 T2I postupka × 3 skupa × 4 arhitekture =
-48 CNN eksperimenata** plus **3 baselajna modela × 3 skupa = 9 eksperimenata**
-(ukupno 57). (Petofti postupak, S-IGTD, prvobitno je planiran ali je izostavljen
-— videti 3.2.5.) Rezultati se čuvaju po eksperimentu (JSON) sa svim metrikama,
+Eksperimentalna matrica obuhvata **4 T2I postupka × 3 skupa × 3 arhitekture =
+36 CNN eksperimenata** plus **3 baselajna modela × 3 skupa = 9 eksperimenata**
+(ukupno 45). (Šesti postupak, S-IGTD, prvobitno je planiran ali je izostavljen
+— videti 3.2.5; pretrenirani ViT-Base/16 takođe nije u glavnoj seriji —
+§3.3.) Matrica se proširuje na 48 CNN eksperimenata ako se ViT vrati
+(`--archs shallow,resnet,resnet_scratch,vit`). Rezultati se čuvaju po eksperimentu (JSON) sa svim metrikama,
 istorijom treninga, trajanjem treninga i brojem epoha, a modeli (težine) se
 čuvaju radi vizuelizacija (Grad-CAM).
 
@@ -398,7 +417,7 @@ i u TINTOlib konstruktorima), pa je generisanje slika determinističko po skupu.
 | ShallowCNN | ~620K | 1×32×32 | $10^{-3}$ | od nule, „poštena“ osnova |
 | ResNet-18 (pretrenirani) | ~11M | 3×32×32 (ImageNet norm.) | $10^{-3}$ | transfer učenje |
 | ResNet-18 (od nule) | ~11M | 1×32×32 | $10^{-3}$ | kontrola kapaciteta |
-| ViT-Base/16 (pretrenirani) | ~86M | 3×224×224 (ImageNet norm., bicubic) | $10^{-4}$ | fino podešavanje (praksa za ViT) |
+| ViT-Base/16 (pretrenirani) | ~86M | 3×224×224 (ImageNet norm., bilinear) | $10^{-4}$ | *van glavne serije* (2026-09-03 — zahteva GPU; §3.3) |
 
 Zajednički hiperparametri za sve eksperimente: Adam, weight decay $10^{-4}$,
 label smoothing 0,1, klasne težine `'balanced'`, rano zaustavljanje 15 epoha,
@@ -502,14 +521,14 @@ Tok podataka od sirovog skupa do rezultata dat je na Slici 5.1
 ```mermaid
 flowchart TD
     A["Skup podataka (CSV / sklearn)"] --> B["Preprocesiranje<br/>čišćenje · one-hot · StandardScaler"]
-    B --> C["Stratifikovana podela 80/10/10<br/>istа za SVE metode · seed 42"]
+    B --> C["Stratifikovana podela 70/10/20<br/>istа za SVE metode · seed 42"]
     C --> D["Scaler: fit samo na treningu"]
     D --> E["T2I fit na X_train<br/>(koordinate / statistike)"]
     E --> F["transform → slike (N, 1, 32, 32) ∈ [0,1]<br/>deterministički (seed 42)"]
     F --> G["DataLoader (batch = 32)"]
     G --> H{"Arhitektura?"}
     H -->|"od nule (shallow, resnet_scratch)"| I["1 kanal (siva slika)<br/>lr = 1e-3"]
-    H -->|"pretrenirani (resnet, vit)"| J["3 kanala + ImageNet normalizacija<br/>lr = 1e-3 (resnet) / 1e-4 (vit)"]
+    H -->|"pretrenirani (resnet)"| J["3 kanala + ImageNet normalizacija<br/>lr = 1e-3 (resnet)"]
     I --> K["Trening: CrossEntropy + klasne težine<br/>+ label smoothing · Adam · scheduler ·<br/>rano zaustavljanje (15) · max 50 epoha"]
     J --> K
     K --> L["Evaluacija na test skupu<br/>Acc · Prec · Rec · F1 · ROC/PR-AUC"]
@@ -521,7 +540,7 @@ Slika 5.1. Dijagram toka podataka — od skupa do rezultata (Mermaid zapis).
 
 ```
 ┌────────────┐   ┌──────────────────────────┐   ┌──────────────────────┐
-│ Skup       │──▶│ Preprocesiranje          │──▶│ Podela 80/10/10      │
+│ Skup       │──▶│ Preprocesiranje          │──▶│ Podela 70/10/20      │
 │ (CSV)      │   │ čišćenje, one-hot,       │   │ stratifikovano       │
 │            │   │ StandardScaler           │   │ (ista za sve, seed 42)│
 └────────────┘   └──────────────────────────┘   └──────────┬───────────┘
@@ -535,8 +554,8 @@ Slika 5.1. Dijagram toka podataka — od skupa do rezultata (Mermaid zapis).
                                                 ▼
                         ┌───────────────────────────────────────────────┐
                         │ Model:  od nule → 1 kanal, lr 1e-3            │
-                        │         pretrenirani → 3 kanala + ImageNet    │
-                        │         normalizacija, lr 1e-3 / 1e-4 (vit)   │
+                        │         pretrenirani (resnet) → 3 kanala +    │
+                        │         ImageNet normalizacija, lr 1e-3       │
                         └───────────────────┬───────────────────────────┘
                                                 │
                                                 ▼
@@ -804,7 +823,7 @@ Listing 5.7. Petlja treninga (`src/train.py`, skraćeno).
 **Zašto svaka komponenta:**
 
 - *Klasne težine* (`compute_class_weight(..., 'balanced')`) — bez njih model na
-  disbalansiranim skupovima (Dry Bean ~6,6:1) brzo konvergira ka „uvek
+  disbalansiranim skupovima (Dry Bean ~6,8:1) brzo konvergira ka „uvek
   predvidi većinsku klasu“. Težine se računaju na `y_train`.
 - *Label smoothing (0,1)* — ciljne raspodele se omekšavaju (npr. [0,9; 0,1]
   umesto [1, 0]), što smanjuje preteranu samouverenost i pomaže generalizaciju
@@ -939,9 +958,10 @@ podešavanje — bez nje transfer učenje na T2I slikama jednostavno ne radi.
 # 6. Rezultati
 
 > Svi brojevi u ovom poglavlju su **TBD** — popunjavaju se nakon finalne serije
-> eksperimenata (`run_all.py` na 48 CNN + 9 baselajna ćelija). Struktura i
-> interpretativni okvir dati su unapred; ne unositi brojeve iz ranijih,
-> nevalidnih verzija protokola (vidi PART 9g, 12a priručnika).
+> eksperimenata (`run_all.py` na 36 CNN + 9 baselajna ćelija; 48 CNN samo
+> ako je ViT ponovo uključen). Struktura i interpretativni okvir dati su
+> unapred; ne unositi brojeve iz ranijih, nevalidnih verzija protokola
+> (vidi PART 9g, 12a priručnika).
 
 ## 6.1 Pregled rezultata po skupovima
 
@@ -975,8 +995,9 @@ nadmašuje XGBoost i na kojoj margini; napomena da su baselajni nepodešeni].
   pretreniranosti) po metodi i skupu → efekat pretreniranosti.
 - [TBD]; diskutovati u svetlu sintetičke prirode slika (odeljak 3.4) i
   činjenice da su pretrenirani modeli primali ImageNet normalizovan RGB ulaz.
-- Za ViT: proveriti da li svaka ćelija pokazuje pad trening gubitka ispod
-  ~0,7 u prvim epohama (potvrda ispravne stope učenja, odeljak 5.9).
+- (Samo ako je ViT ponovo uključen: proveriti da li svaka ćelija pokazuje
+  pad trening gubitka ispod ~0,7 u prvim epohama — potvrda ispravne stope
+  učenja, odeljak 5.9.)
 
 ## 6.4 Dijagnostika slika i vizuelna analiza
 
@@ -1002,12 +1023,14 @@ da mešanje piksela obara F1 ako CNN koristi prostornu strukturu. Naivna metoda
 služi kao donja granica; njena mana je redosledni raspored bez grupisanja
 sličnih atributa (a ne gustina — gustina je uporediva sa ostalim metodama).
 
-**Transfer učenje na sintetičkim slikama.** [TBD] — pretrenirani ResNet i ViT
-uče opšte obrase sa prirodnih slika; na T2I slikama raspodela se razlikuje.
-Diskutovati odnos `resnet` vs `resnet_scratch`, kao i ViT rezultate uz napomenu
-da je stopa učenja za ViT birana prema praksi finog podešavanja ($10^{-4}$), a
-da su rane verzije protokola sa $10^{-3}$ kolabirale (gubitak zaključan na
-$\log 2$) — ti rezultati nisu deo finalne tabele.
+**Transfer učenje na sintetičkim slikama.** [TBD] — pretrenirani ResNet-18
+uči opšte obrase sa prirodnih slika; na T2I slikama raspodela se razlikuje.
+Diskutovati odnos `resnet` vs `resnet_scratch`. Pretrenirani ViT-Base/16
+nije deo glavne serije (računska ograničenja, §3.3); pilot testiranje tokom
+validacije pokazalo je da je stopa učenja za ViT kritična — fino podešavanje
+zahteva $10^{-4}$, dok su rane verzije sa $10^{-3}$ kolabirale na predviđanje
+jedne klase (gubitak zaključan na $\log 2$) — što ostaje osnova za budući
+rad, ne za rezultatsku tabelu.
 
 **Kapacitet vs metoda.** Rezultati odražavaju interakciju metode i kapaciteta;
 poređenja metoda treba čitati **unutar** svake arhitekture.
@@ -1023,8 +1046,11 @@ poređenja metoda treba čitati **unutar** svake arhitekture.
    optimalni režim.
 5. TINTOlib biblioteka kao crna kutija za projekciju/optimizaciju (bit-level
    rezultati mogu zavisiti od verzije).
-6. ViT ulaz je interpolisan sa 32×32 na 224×224 (bikubično) — interpolacioni
-   artefakti su identični za sve metode, ali postoje.
+6. Rezultati se odnose na tri arhitekture; ViT-Base/16 nije uključen iz
+   računskih razloga (zahteva GPU vreme). Da li transformerska arhitektura
+   sa transfer učenjem pomaže na T2I slikama ostaje otvoreno pitanje za
+   budući rad (dodatni izazov te postavke je i interpolacija ulaza sa
+   32×32 na 224×224).
 7. S-IGTD nije evaluiran (videti 3.2.5) — rezultati se odnose na četiri metode.
 
 ---
@@ -1040,7 +1066,8 @@ hiperparametara (Optuna) za sve modele pod istim protokolom; adaptivno
 određivanje veličine slike po broju atributa (protokol je u ovom radu fiksirao
 32×32); selekcija atributa pre preslikavanja; prava nadgledana S-IGTD
 implementacija; savremene arhitekture za tabelarne podatke kao gornja granica
-(TabPFN i sl.); Grad-CAM na više arhitektura.
+(TabPFN i sl.); Grad-CAM na više arhitektura; pilot sa pretreniranim
+ViT-Base/16 (nalaz o stopi učenja $10^{-4}$ iz §3.4 već je pripremljen).
 
 ---
 
@@ -1098,18 +1125,20 @@ implementacija; savremene arhitekture za tabelarne podatke kao gornja granica
 odgovarati kodu — svaka ima zabeležen razlog u `Plan/paper-statement-guide.md`):
 
 - [ ] Popuniti TBD brojeve iz isključivo finalne serije (`results/`, ključ
-      `lr` u JSON mora biti 1e-4 za vit, 1e-3 za ostale; bez `*_s_igtd*` fajlova).
+      `lr` u JSON = 1e-3 za sve arhitekture trenutne serije; bez `*_s_igtd*`
+      fajlova; `*_vit*` fajlovi samo ako je ViT eksplicitno uključen).
 - [ ] U tabelama F1 označiti: makro (Dry Bean) / pozitivna klasa (BC, Adult);
       nigde reč „makro“ za binarne skupove (PART 13e).
 - [ ] Navesti da su baselajni nepodešeni i da CNN hiperparametri nisu podešavani
       po metodi (PART 13b, 1.3).
-- [ ] Navesti jednu podelu 80/10/10 bez CV (PART 1.1) i da su svi modeli trenirani
+- [ ] Navesti jednu podelu 70/10/20 bez CV (PART 1.1) i da su svi modeli trenirani
       na istim trening redovima (PART 11.3).
 - [ ] U metodologiji: ImageNet normalizacija + 3 kanala za pretrenirane,
       1 kanal za od-nule modele (PART 4.2/9a); opseg [0,1] po metodi (PART 10a).
 - [ ] S-IGTD pomenuti samo kao srodan pristup (PART 13i, 8b).
 - [ ] Ne koristiti tvrdnje iz PART 7 (LP-FT/CV/adaptivno) — nisu deo protokola.
-- [ ] ViT: opisati stopu 1e-4 kao praksu finog podešavanja (PART 12).
+- [ ] ViT pomenuti samo kao van glavne serije + nalaz o stopi 1e-4 kao
+      osnovu za budući rad (PART 12, 14).
 - [ ] Listinge 5.1–5.11 proveriti pre slanja — skraćeni su izvodi iz aktuelnog
       koda (fajl je naveden u svakom listingu).
 - [ ] Reference prebaciti iz `Notebook/references.bib`.
