@@ -114,6 +114,7 @@ def train_model(model, train_loader, val_loader, config):
     best_model_state = None
     epochs_no_improve = 0
 
+    epoch_start = time.time()
     for epoch in range(epochs):
         # --- Training ---
         model.train()
@@ -160,7 +161,16 @@ def train_model(model, train_loader, val_loader, config):
         else:
             epochs_no_improve += 1
 
+        # Progress update every epoch
+        epoch_time = time.time() - epoch_start
+        epoch_start = time.time()
+        lr_now = optimizer.param_groups[0]['lr']
+        improved = '*' if epochs_no_improve == 0 else ''
+        print(f"    Epoch {epoch+1:2d}/{epochs}: loss={train_loss:.4f}/{val_loss:.4f} "
+              f"acc={val_acc:.4f} lr={lr_now:.1e} [{epoch_time:.1f}s]{improved}")
+
         if epochs_no_improve >= patience:
+            print(f"    Early stopping at epoch {epoch+1} (no improvement for {patience} epochs)")
             break
 
     # Load best model
