@@ -455,6 +455,23 @@ ls results/figures/*.png  # Should have 15-20 figures
 
 ---
 
+**Figure set addendum (2026-09-03, live):** the definitive figure list lives in
+`Plan/seminar2-rad-nacrt.md` §9.2 Prilog A (source of truth). Two additions:
+
+- `src/visualize.py` → `plot_transfer_delta()` → `ch4_transfer_delta.png`
+  (ΔF1 = pretrained resnet − resnet_scratch per dataset × method; needs the
+  36-cell CNN run; answers RQ2 directly).
+- `src/visualize_arrangement.py` (no experiments needed — fits T2I methods on
+  the training split) → `ch3_feature_layout_{dataset}.png` (where each feature
+  is drawn, from the fitted coordinate maps; naive derived analytically) and
+  `ch4_arrangement_quality.png` (scatter of pair pixel distance vs |Pearson r|
+  + Spearman per panel). Coordinate source: fitted TINTOlib
+  `_features_mapping`/`_features_positions`, NOT a custom estimate, so panels
+  reflect exactly where the transform writes values (e.g., this TINTOlib IGTD
+  assigns the D features to the first D row-major pixels).
+
+---
+
 ## Implementation Order & Dependencies
 
 ```

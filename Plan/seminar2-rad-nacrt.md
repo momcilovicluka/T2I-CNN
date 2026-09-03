@@ -515,7 +515,7 @@ Projekat je organizovan u module prema odgovornostima:
 | `src/train.py` | petlja treninga, seeds, klasne težine, ImageNet normalizacija |
 | `src/evaluate.py` | metrike na test skupu |
 | `src/ablation.py` | ablacije (pixel shuffling, feature ordering, LP-FT) |
-| `src/visualize.py`, `src/visualize_t2i.py`, `src/gradcam.py` | slike za rad |
+| `src/visualize.py`, `src/visualize_t2i.py`, `src/visualize_arrangement.py`, `src/gradcam.py` | slike za rad (vizualizacije rasporeda atributa ne zahtevaju eksperimente) |
 
 Tok podataka od sirovog skupa do rezultata dat je na Slici 5.1
 (ekvivalent u ASCII zapisu na Slici 5.2, radi lakšeg prenosa u uređivač teksta).
@@ -1215,6 +1215,15 @@ ViT-Base/16 (nalaz o stopi učenja $10^{-4}$ iz §3.4 već je pripremljen).
 | Raspodela klasa | `results/figures/ch3_class_distribution.png` | 4.1 |
 | Preklapanje (OF/OP) | `results/figures/ch4_overlap_diagnostics.png` | 3.2.6 |
 | Grad-CAM | `results/figures/ch4_gradcam_{dataset}.png` | 6.4 |
+| Uticaj transfer učenja (Δ F1) | `results/figures/ch4_transfer_delta.png` | 6.3 |
+| Raspored atributa po metodi | `results/figures/ch3_feature_layout_{dataset}.png` | 3.2/5.x |
+| Sličnost vs. piksel-udaljenost | `results/figures/ch4_arrangement_quality.png` | 3.2.6 |
+
+> Slika 3.2x/3.2y (novo, bez eksperimenata — računa se iz trening skupa i
+> koordinata T2I metoda; skripta `src/visualize_arrangement.py`): raspored
+> atributa pokazuje GDE svaka metoda upisuje vrednosti na 32×32; Δ-F1 slika
+> (potrebni rezultati CNN serije) prikazuje resnet − resnet_scratch po metodi
+> i skupu — direktan odgovor na RQ2 (transfer učenje).
 
 **Prilog B — Kontrolna lista pri popunjavanju rezultata** (sve tvrdnje moraju
 odgovarati kodu — svaka ima zabeležen razlog u `Plan/paper-statement-guide.md`):

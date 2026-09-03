@@ -1050,3 +1050,33 @@ coordinates reflect linear/correlation structure. Also corrected the
 PCA (TINTOlib's default projection)"; do not write t-SNE anywhere for
 the implemented methods. (t-SNE belongs only to the original
 DeepInsight *paper* description in §2.)
+
+### 15d. New arrangement figures + transfer-delta semantics (2026-09-03)
+
+**Added:** `src/visualize_arrangement.py` produces
+`ch3_feature_layout_{dataset}.png` and `ch4_arrangement_quality.png`;
+`src/visualize.py::plot_transfer_delta()` produces
+`ch4_transfer_delta.png`.
+
+**Semantics to state honestly in the paper (verified against
+TINTOlib source):**
+- Layout panels plot the FITTED model's feature→pixel mapping
+  (`_features_mapping` / `_features_positions`); naive is derived
+  analytically (pad to ceil(sqrt(D)) square, scaled to 32×32). They
+  show where the transform writes each feature, not a hand-picked
+  idealization.
+- In this TINTOlib version, IGTD assigns the D features to the first D
+  row-major grid pixels and only re-orders which feature occupies each
+  slot (`_fitAlg` → `coordinate[:num]`), so its panels appear as a
+  narrow strip (e.g., one row for D ≤ 32). Say this if IGTD layout is
+  discussed; it explains why IGTD's arrangement ρ ≈ 0 despite its
+  documented distance-ranking optimization.
+- On adult_income (104 features, one-hot heavy) TINTO/DeepInsight map
+  many features onto shared pixels (measured 78/70 of 104) and the
+  pair-distance ρ is positive — evidence that at 32×32 these methods
+  crowd, not separate, high-dimensional one-hot features. Frame as
+  diagnostic, not as failure of the methods per se (image size is
+  fixed for comparability, PART 1.1).
+- Transfer delta is within-dataset only: bars of
+  (F1_pretrained − F1_from-scratch) share F1 label semantics inside a
+  dataset (PART 13e) but are NOT comparable across datasets.

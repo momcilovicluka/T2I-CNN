@@ -549,7 +549,10 @@ def plot_density_vs_performance(results, output_dir='results/figures'):
 
     for r in cnn_results:
         # Estimate density from dataset and image_size
-        feature_counts = {'breast_cancer': 30, 'dry_bean': 16, 'adult_income': 108}
+        # Authoritative feature counts (post-fix adult: 45,222 rows -> 6 numerical
+        # + 98 one-hot = 104 features; audit 2026-09-03, see paper-statement-guide
+        # PART 15b). image_size is taken per-result from the JSON.
+        feature_counts = {'breast_cancer': 30, 'dry_bean': 16, 'adult_income': 104}
         n_feat = feature_counts.get(r['dataset'], 30)
         img_size = r.get('image_size', 32)
         density = n_feat / (img_size * img_size) * 100
@@ -946,6 +949,88 @@ def plot_roc_curves(results, output_dir='results/figures'):
 
 
 # ============================================================
+# Figure: Transfer Learning Effect (Δ = pretrained ResNet − ResNet from scratch)
+# ============================================================
+
+def plot_transfer_delta(results, output_dir='results/figures'):
+    """Bar chart: ΔF1 = pretrained ResNet − ResNet-from-scratch per dataset × method.
+
+    WHY (RQ2 — the professor's core 'transfer vs. local training' question):
+    resnet and resnet_scratch share the identical ResNet-18 architecture and
+    differ ONLY in pretraining, so their F1 difference isolates the effect of
+    ImageNet transfer on synthetic T2I images. Plotting the delta (not the
+    two absolute series) directly answers 'when does pretraining help, and
+    when does it hurt (negative transfer)?'
+
+    Semantics: both archs are evaluated on the SAME test rows and their F1 is
+    computed with the SAME label semantics within a dataset (see F1_LABEL), so
+    the per-panel delta is a fair within-dataset comparison. Bars are not
+    comparable across datasets (label semantics differ, PART 13e).
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
+    made = False
+
+    for idx, dataset in enumerate(DATASETS):
+        ax = axes[idx]
+        deltas = []
+        labels = []
+        for method in T2I_METHODS:
+            # Both archs are stored as separate result rows sharing the same
+            # dataset + t2i_method; pick the pair differing only in cnn_arch.
+            pre_r = next((r for r in results if r['dataset'] == dataset
+                          and r['cnn_arch'] == 'resnet'
+                          and r['t2i_method'] == method), None)
+            scr_r = next((r for r in results if r['dataset'] == dataset
+                          and r['cnn_arch'] == 'resnet_scratch'
+                          and r['t2i_method'] == method), None)
+            if pre_r is None or scr_r is None:
+                continue
+            deltas.append((pre_r['f1_macro'] - scr_r['f1_macro']) * 100)
+            labels.append(T2I_LABELS[method])
+
+        if not deltas:
+            print(f"  No paired resnet/resnet_scratch results for {dataset}, skipping")
+            continue
+        made = True
+
+        colors = ['#2E7D32' if d >= 0 else '#C62828' for d in deltas]
+        bars = ax.bar(range(len(deltas)), deltas, color=colors,
+                      edgecolor='white', linewidth=0.5)
+        ax.axhline(0, color='black', linewidth=1)
+        for bar, d in zip(bars, deltas):
+            ax.text(bar.get_x() + bar.get_width()/2,
+                    bar.get_height() + (0.15 if d >= 0 else -0.15),
+                    f'{d:+.1f}', ha='center',
+                    va='bottom' if d >= 0 else 'top',
+                    fontsize=10, fontweight='bold')
+
+        ax.set_xticks(range(len(labels)))
+        ax.set_xticklabels(labels, fontsize=10)
+        ax.set_ylabel('Δ F1 (pretrained − scratch, pp)' if idx == 0 else '')
+        ax.set_title(DATASET_LABELS[dataset].split('\n')[0],
+                     fontsize=11, fontweight='bold')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+    if not made:
+        print("  No paired resnet/resnet_scratch results anywhere — "
+              "transfer delta figure requires the 36-cell CNN run")
+        plt.close(fig)
+        return
+
+    fig.suptitle('Transfer Learning Effect: ResNet-18 pretrained vs from scratch',
+                 fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    path = output_path / 'ch4_transfer_delta.png'
+    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    print(f"  Saved: {path.name}")
+
+
+# ============================================================
 # Figure: Overlap Diagnostics
 # ============================================================
 
@@ -1072,6 +1157,9 @@ def main():
 
     print("\n=== New: Runtime Comparison ===")
     plot_runtime_comparison(results)
+
+    print("\n=== New: Transfer Learning Effect ===")
+    plot_transfer_delta(results)
 
     print("\n=== New: Class Distribution ===")
     plot_class_distribution()

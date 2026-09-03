@@ -95,7 +95,7 @@ def plot_comparison(dataset_name, image_size=32):
 def plot_pixel_density_comparison():
     """Show how feature density varies across methods and datasets."""
     datasets = ['breast_cancer', 'dry_bean', 'adult_income']
-    dataset_labels = ['Breast Cancer\n(30 feat)', 'Dry Bean\n(16 feat)', 'Adult Income\n(108 feat)']
+    dataset_labels = ['Breast Cancer\n(30 feat)', 'Dry Bean\n(16 feat)', 'Adult Income\n(104 feat)']
     methods = ['naive', 'tinto', 'deepinsight', 'igtd']
     method_labels = ['Naive', 'TINTO', 'DeepInsight', 'IGTD']
     image_size = 32
