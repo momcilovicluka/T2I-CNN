@@ -39,6 +39,18 @@ both factors.
 - `src/t2i/naive.py` lines 18-19: grid_size = ceil(sqrt(n_features))
 - Feature density analysis: breast cancer 30 features in 1024 pixels = 2.9%
 
+**Correction (2026-09-03, doc audit):** The "97%+ zero-padded /
+2.9%/1.6%/10.5% density" figures above describe single-pixel
+coordinate layouts (the point-mapped projection layouts, measured
+~97% zero pixels at 32x32 for DeepInsight), NOT the current naive
+implementation. Current naive pads each sample to the smallest
+square grid and bicubic-resizes to 32x32, so it has no strict-zero
+majority. Naive's genuine weakness is that it arranges features in
+row-major input order with a padding band — no similarity grouping.
+Do not repeat the 97%-zeros wording in the paper; use measured
+per-method densities (results/figures/t2i_density_comparison.png)
+and describe the layout property instead. See PART 13g.
+
 ### 1.3 Fixed Hyperparameters
 **Write:** "All experiments used identical hyperparameters (epochs=50,
 early stopping patience=15, weight decay=1e-4, label smoothing=0.1,
@@ -281,6 +293,14 @@ density, preventing excessive sparsity that would render convolutional operation
 ineffective. This adaptive sizing approach follows the VFP principle of matching
 image dimensions to feature count."
 
+**SUPERSEDED for the final protocol (2026-09-03, PART 13f):** the
+adaptive auto-sizing path (compute_optimal_image_size / auto_size)
+exists but is deliberately NOT used by the main experiments — every
+dataset and method uses a fixed 32x32 canvas (DATASET_CONFIG in
+run_all.py). A resolution diagnostic (native 32 vs 128 for TINTO /
+DeepInsight) measured larger canvases as WORSE, so 32x32 was kept.
+Do not copy the 7a paper statement below into the paper.
+
 ### 7b. ResNet-18 From-Scratch Option (Concern 4)
 
 **What was done:** Implemented `ResNetWrapper` in `src/models/resnet_wrapper.py`
@@ -301,15 +321,28 @@ Fine-Tuning (LP-FT) strategy was employed. Phase 1 stabilizes the classification
 head without corrupting pretrained features. Phase 2 gradually adapts the full
 network to the synthetic image distribution."
 
+**SUPERSEDED for the final protocol (2026-09-03, PART 13h):** LP-FT
+(train_lp_ft) is used ONLY by the ablation study. The main table
+trains all architectures — including pretrained ResNet/ViT — with
+the plain train_model() loop and a single Adam group at ARCH_LR
+(see PART 11.4 / 12b). Do not copy the 7c paper statement
+("LP-FT was employed for pretrained models") into the paper.
+
 ### 7d. ViT Wrapper with 224x224 Resize (Concern 6)
 
 **What was done:** Implemented `ViTWrapper` in `src/models/vit_wrapper.py` using
 timm's ViT-Base/patch16/224. Automatically resizes input to 224x224 with bilinear
-interpolation. Uses LP-FT for transfer learning.
+interpolation. Uses LP-FT for transfer learning (ablation-only in the final protocol; the main table uses train_model(), see PART 13h).
 
 **Paper statement:** "ViT-Base (patch_size=16) was used with input images resized
 from 32x32 to 224x224 via bilinear interpolation to produce 196 patches, providing
 sufficient spatial tokens for self-attention mechanisms."
+
+**SUPERSEDED for the final protocol (2026-09-03, PART 13h):**
+cross_validate() is implemented but never invoked. The main results
+use the single fixed 80/10/10 split (PART 1.1). Do NOT copy the 7e
+paper statement ("All experiments were evaluated using stratified
+5-fold cross-validation") into the paper — it is false.
 
 ### 7e. Cross-Validation (Concern 1)
 
@@ -676,3 +709,202 @@ sites, so every ablation cell mirrors the main pipeline. Any
 cell at the wrong LR) — re-run the ablation. LP-FT's own two-phase
 schedule (head 1e-3, then all layers 1e-4) is unchanged; it is the
 procedure under comparison, not a reproduction of the main row.
+
+---
+
+## PART 13: Configuration & Decision Rationale — Coverage Audit (2026-09-03)
+
+Result of a full code sweep: every tunable parameter and protocol
+decision below was checked against the code, and each has a recorded
+reason (code comment or doc section). Unresolved items are flagged
+as DECISION REQUIRED.
+
+### 13a. T2I control parameters = TINTOlib reference defaults (verified)
+
+All TINTOlib hyperparameters in src/t2i/*.py were compared against
+the installed TINTOlib 1.3.1 constructor signatures:
+- TINTO: algorithm='PCA', submatrix=True, amplification=3.14
+  (library default is pi = 3.14159...; 3.14 is its 3-decimal value),
+  distance=2, steps=4, option='mean', times=4, zoom=1,
+  cmap='binary' — all library defaults. Our deviations: pixels=
+  image_size (32), random_seed=42 (vs default 1), format='npy'
+  (vs png), blur=True (TINTO's defining feature — commented in
+  code).
+- IGTD / S-IGTD: fea_dist_method='Pearson',
+  image_dist_method='Euclidean', error='squared', max_step=1000,
+  val_step=50 — all library defaults; only scale=[image_size,
+  image_size], format and seed were set.
+- DeepInsight: internal defaults used (algorithm_rd='PCA', bin
+  assignment, lsa optimization, group_method='avg'); only
+  image_dim, format and seed set.
+
+No per-method T2I tuning was performed, consistent with the fixed-
+hyperparameter policy (PART 1.3 / 2.4).
+
+**Paper statement (methodology):** "T2I methods were run at the
+TINTOlib reference defaults; only the canvas size (32x32), random
+seed, output format, and TINTO's blurring were set explicitly."
+
+### 13b. Baselines deliberately untuned (decision, must state)
+
+RF (n_estimators=100, max_depth=None, min_samples_split=2), XGBoost
+(n_estimators=100, max_depth=6, learning_rate=0.1, mlogloss) and MLP
+(hidden (128,64), relu, max_iter=500, early_stopping on 10% val)
+use reference/library-default values with no per-model search — the
+same no-tuning policy as the CNNs. Module docstrings in
+src/baselines/*.py give the inclusion rationale for each model.
+
+**Paper statement (limitations):** "Baseline classifiers used
+untuned reference configurations; no hyperparameter search was
+performed for any model in the study (CNNs or baselines)." This
+answers the "strawman baseline" critique: the comparison is
+untuned-vs-untuned, and CNN-vs-baseline gaps may widen under
+tuning — future work.
+
+### 13c. Ablation study hyperparameters (rationale recorded here)
+
+- Pixel-shuffle verdict label: 'spatial_structure_matters' iff
+  f1_drop > 0.02 (src/ablation.py:137). Auxiliary label for the
+  figure only — the paper must cite raw deltas, not this cutoff.
+- LP-FT verdict: better/worse/comparable at +/-0.01 F1 (line 379),
+  same caveat.
+- LP-FT epoch split 10 LP + 40 FT = 50 total, equal to the main
+  50-epoch budget (train.py train_lp_ft defaults), keeping the
+  ablation comparable to the main table.
+- Feature-ordering strategies: 'original' / 'reversed' / 'random'
+  (fixed permutation seed 42) / 'correlation' (descending
+  |corr(feature, target)|). Random re-fit uses the same seed per
+  ordering so every ordering sees the identical T2I pipeline.
+
+### 13d. Label smoothing applied uniformly, including binary datasets
+
+label_smoothing=0.1 is used for every dataset, including binary
+breast_cancer and adult_income, although the literature suggests
+it can hurt calibration on small binary problems (reviewer point 9).
+Decision: keep 0.1 everywhere for a uniform, comparable protocol
+(PART 1.3 / workflow design-decision 2). State this explicitly in
+the paper if reviewers ask why it is not disabled per dataset.
+
+### 13e. METRIC DEFINITION — DECISION REQUIRED
+
+src/evaluate.py _compute_metrics uses
+avg = 'macro' if num_classes > 2 else 'binary' but always names the
+keys precision_macro / recall_macro / f1_macro. Consequences:
+- dry_bean (7 classes): true macro average.
+- breast_cancer and adult_income (binary): the reported "macro"
+  values are scikit 'binary' averages — positive class only. For
+  breast_cancer the positive class (1 = benign) is the MAJORITY
+  class; for adult_income the positive class (1 = >50K) is the
+  MINORITY class. So the same-named metric measures the majority
+  class on one dataset and the minority class on the other.
+
+This contradicts the docs that claim macro-F1 everywhere (PART 2.3,
+PART 3.1, workflow design-decision 4, professor-validation Sec. 3)
+and guide 2.3's reference "f1_score(..., average='macro')" is
+accurate only for multiclass. The current Colab run and any tables
+built from it inherit this behavior.
+
+Options:
+- (A, recommended) average='macro' always — matches every doc
+  claim and the imbalance rationale. Requires re-running the two
+  binary datasets (40 CNN cells + 6 baselines + ablations).
+- (B) Keep binary-average for 2-class data and relabel: report
+  "F1 (positive class)" for binary datasets, never "macro".
+  No re-run, but the headline metric then differs across rows.
+
+Decision pending (ask the user).
+
+### 13f. Fixed 32x32 canvas (supersedes PART 7a and workflow CP3 row 8)
+
+Final protocol: image_size=32 for every dataset and every T2I
+method (DATASET_CONFIG in run_all.py). Naive internally uses its
+own per-dataset grid (ceil(sqrt(d))) then bicubic-resizes to 32x32.
+Rationale: an identical canvas across all methods/datasets keeps the
+T2I layout as the only varying factor per cell, and a resolution
+diagnostic (native 32 vs 128 for TINTO/DeepInsight, 2026-09-03)
+measured larger canvases as strictly worse because TINTOlib's
+blur/amplification parameters do not scale with the canvas.
+Adaptive sizing (compute_optimal_image_size, >=20% density target)
+remains available but is deliberately unused. Adult income's 108
+features at 10.5% single-pixel density is a documented limitation
+(PART 1.2), not resolved by image sizing.
+
+### 13g. Naive density attribution (supersedes PART 1.2 wording)
+
+See the correction inserted in PART 1.2. In short: the 2.9/1.6/
+10.5% densities and "97%+ zeros" describe point-mapped projection
+layouts, not the current naive rendering; do not repeat that
+wording. Naive's real limitation is order-preserving, correlation-
+blind arrangement plus a padding band.
+
+### 13h. Unused utilities — do not claim them in the paper
+
+zscore_normalize(), cross_validate(), get_param_groups() (both
+wrappers), the T2I auto_size path, and run_all.ProgressTracker are
+implemented but NOT part of the final protocol. The main pipeline
+uses: ImageNet normalization (not z-score) for pretrained models;
+plain train_model() with one Adam group (not LP-FT/param groups);
+a single split (not CV). PART 7c/7e statements claiming LP-FT and
+5-fold CV for all experiments are superseded (markers added above)
+and must not be quoted. ProgressTracker is dead code that references
+datetime/timedelta without an import (would raise NameError if ever
+called) — candidate for deletion.
+
+### 13i. S-IGTD as implemented is identical to IGTD (CONFIRMED — DECISION REQUIRED)
+
+Probe (2026-09-03, breast_cancer train split, image_size=32):
+SIGTD.fit() then compare to IGTD.fit() — coordinates bit-identical
+(max coord diff 0), first-5-sample transforms bit-identical (max
+pixel diff 0.0). Cause: s_igtd.py computes the supervised
+between-group distance matrix D_B = 1 - |corr(class-wise means)|
+(_compute_between_group_distances, verified working) but only
+stores it in self._supervised_dist — it is never used to build or
+re-optimize the feature-to-pixel layout. fit() then calls the same
+TINTO_IGTD(...random_seed=42) with the same arguments as igtd.py,
+so the two methods produce the same images, and every
+s_igtd_{dataset} result in the experiments is numerically a
+re-run of igtd. TINTOlib 1.3.1 IGTD exposes only named distance
+methods (Pearson/Spearman/Euclidean/set/Wasserstein/Jensen/
+Geodesic/Tropical — igtd.py __generate_feature_distance_ranking),
+so a custom supervised matrix cannot be injected via fea_dist_method.
+
+Consequences: the S-IGTD column cannot support any "S-IGTD vs IGTD"
+claim (PART 8b's 5-8% improvement reference describes the real
+algorithm and does NOT apply to what was run). If the current Colab
+suite finishes with s_igtd cells, they duplicate igtd cells.
+
+Options:
+- (A) Implement true S-IGTD: replicate IGTD's ranking + swap
+  optimization (TINTOlib igtd.py _fitAlg internals, Apache-2.0)
+  with the supervised distance matrix as input, keep the library
+  only for rendering; re-run the 15 s_igtd cells + s_igtd figures.
+- (B) Drop s_igtd from the method set (report 4 methods) and
+  remove its column from figures — no re-run needed, paper stays
+  honest.
+- (C) Keep the method but disclose that the shipped S-IGTD wrapper
+  currently duplicates IGTD — not recommended (looks like an
+  uncaught implementation bug in the paper).
+
+Decision pending (ask the user). PART 8b's S-IGTD literature claim
+must be removed or re-scoped whichever way this resolves.
+
+### 13j. Confirmed coverage (every remaining value has a recorded reason)
+
+| Value / decision | Where the reason is recorded |
+|---|---|
+| epochs=50, batch=32, wd=1e-4, patience=15, smoothing=0.1, scheduler (factor=0.5, patience=5), Adam | PART 1.3/2.4/11.4; workflow CP4.5 rows 5-6 |
+| ARCH_LR (vit 1e-4, others 1e-3) | PART 12; run_all.py comment on ARCH_LR |
+| Splits 80/10/10 stratified, seed 42, StandardScaler train-only | PART 11.1; preprocessing.py |
+| Seeds 42 (global + TINTOlib) | PART 6/11.2; code |
+| Class weights 'balanced' (sklearn) | PART 2.3; train.py comment |
+| Metric family (acc, prec/rec/F1, ROC/PR-AUC, confusion) | PART 2.3/3.1; caveat in 13e |
+| Naive bicubic + clip + train-min-max | PART 4.1; naive.py comments |
+| ImageNet norm + 3ch pretrained conv | PART 4.2/9a; train.py + run_all.py comments |
+| ResNet from-scratch / capacity framing | PART 1.4/7b |
+| ViT 224 bilinear resize, patch16 | PART 1.6/7d; vit_wrapper.py docstring |
+| Grad-CAM layer3 for ResNet, ShallowCNN focus | PART 9f; gradcam.py |
+| IGTD /255.0, clip-only; TINTO train-scale cache | PART 10a/10b; igtd.py/tinto.py comments |
+| OF/OP overlap metrics | overlap_metrics.py docstring (Sharma 2019) |
+| Dataset selection | chapter4-plan 4.1.1; professor-validation Sec. 7 |
+| Baselines train on X_train only | PART 9b/11.3; run_all.py comment |
+| Atomic writes + parse-validating resume | PART 10c/10d |

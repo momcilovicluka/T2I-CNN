@@ -586,9 +586,9 @@ python src/visualize.py  # Generate all figures
 | 3 | IGTD output range [0,255] mismatch | Divide by 255.0 | a760bbf |
 | 4 | CSV order bug | Index-based loading | bf6e158 |
 | 5 | IGTD redundant fit transform | Removed | bf6e158 |
-| 6 | Naive 97%+ zeros | Documented as limitation | — |
+| 6 | Naive "97%+ zeros" (stale: describes point-mapped layouts, not current naive) | Documented as limitation → attribution corrected in guide PART 1.2/13g | — |
 | 7 | Class imbalance | Class weights + macro-F1 | 79e79c9 |
-| 8 | 32x32 too small for 108 feat | PLANNED for CP4 | — |
+| 8 | 32x32 sparse for 108 features | Resolved: fixed 32x32 kept (resolution diagnostic showed larger worse) — guide PART 13f | — |
 | 9 | ResNet/ViT need 224x224 | PLANNED for CP4 | — |
 | 10 | Small data overfitting | Weight decay + early stop + label smoothing | 79e79c9, 8b556ad |
 
@@ -720,6 +720,20 @@ Total: 60 CNN experiments (5 T2I x 3 datasets x 4 architectures) + 9 baselines (
 6. **Why /255.0 for IGTD**: IGTD outputs [0,255] via matplotlib colormap, DeepInsight outputs [0,1] via MinMaxScaler. Explicit /255.0 makes normalization deterministic rather than dependent on batch max. (Bug #3)
 
 7. **Why clamp(0,1)**: Out-of-distribution test samples can have values outside training range. Clipping ensures consistent pixel range across all methods and splits. (Bug #2)
+
+8. **Why fixed 32x32 for every dataset/method** (resolves CP3 row 8): identical canvas across all cells keeps the T2I layout as the only varying factor; a 32-vs-128 resolution diagnostic measured larger canvases WORSE for TINTO/DeepInsight (blur/amplification do not scale). Auto-sizing exists but is deliberately unused. (guide PART 13f)
+
+9. **Why T2I control parameters are TINTOlib defaults**: TINTO (amplification=3.14 ~ pi, distance=2, steps=4, times=4, option='mean', zoom=1, PCA) and IGTD/S-IGTD (Pearson/Euclidean/squared/max_step=1000/val_step=50) match the installed TINTOlib 1.3.1 defaults; only canvas, seed, npy format and TINTO blur are set. No per-method T2I tuning, matching the no-tuning policy for CNNs and baselines. (guide PART 13a)
+
+10. **Why baselines are untuned reference configs**: RF/XGBoost/MLP use library defaults by design (same no-tuning policy as CNNs); must be stated as a limitation so gaps vs CNNs are not over-read. (guide PART 13b)
+
+11. **Why label smoothing 0.1 on binary datasets too**: uniform protocol across all datasets; literature caveat (harmful for small binary) acknowledged and deliberately kept for comparability. (guide PART 13d)
+
+12. **Why ablation verdict cutoffs (0.02 / 0.01 F1) and LP-FT 10+40 epochs**: cutoffs only label figures (cite raw deltas in the paper); 10 LP + 40 FT = 50 total = the main 50-epoch budget, so the ablation matches the main table's training budget. (guide PART 13c)
+
+13. **Metric naming caveat**: binary datasets report scikit 'binary' average under the f1_macro key, not true macro — DECISION REQUIRED in guide PART 13e.
+
+14. **Why the supervised distance in S-IGTD is computed but never used**: it is not — confirmed gap. SIGTD.fit() computes D_B (between-group correlation distance) but never feeds it to the layout optimizer, so S-IGTD images are bit-identical to IGTD's (probe-verified: coord diff 0, pixel diff 0). TINTOlib 1.3.1 IGTD accepts only named distance methods, so a real S-IGTD needs the ranking/swap optimizer re-implemented with the supervised matrix, or the method must be dropped. DECISION REQUIRED in guide PART 13i.
 
 ## CHECKPOINT 3.5: Model Architecture Implementation (COMPLETED)
 
