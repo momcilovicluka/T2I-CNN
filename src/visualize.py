@@ -557,6 +557,299 @@ def plot_density_vs_performance(results, output_dir='results/figures'):
 # Main
 # ============================================================
 
+# ============================================================
+# Figure: Class Distribution
+# ============================================================
+
+def plot_class_distribution(output_dir='results/figures'):
+    """Bar chart showing class distribution for all 3 datasets.
+
+    WHY: Explains why macro-F1 was chosen over accuracy.
+    Dry Bean has 7 classes with 3:1 imbalance. Adult Income
+    has 3.2:1 imbalance. Without seeing this, readers might
+    question why accuracy alone isn't sufficient.
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Load datasets to get true class distributions
+    sys.path.insert(0, str(Path(__file__).parent))
+    from src.preprocessing import load_breast_cancer, load_dry_bean, load_adult_income
+
+    loaders = {
+        'breast_cancer': load_breast_cancer,
+        'dry_bean': load_dry_bean,
+        'adult_income': load_adult_income,
+    }
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+
+    for idx, (dataset, loader_fn) in enumerate(loaders.items()):
+        ax = axes[idx]
+        X, y, _, class_names = loader_fn()
+        unique, counts = np.unique(y, return_counts=True)
+
+        colors = plt.cm.Set2(np.linspace(0, 1, len(unique)))
+        bars = ax.bar(range(len(unique)), counts, color=colors,
+                      edgecolor='white', linewidth=0.5)
+
+        # Add count labels
+        for bar, count in zip(bars, counts):
+            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 50,
+                    str(count), ha='center', va='bottom', fontsize=10, fontweight='bold')
+
+        # Add imbalance ratio annotation
+        max_count = counts.max()
+        min_count = counts.min()
+        ratio = max_count / min_count
+        ax.annotate(f'Imbalance: {ratio:.1f}:1', xy=(0.95, 0.95),
+                    xycoords='axes fraction', ha='right', va='top',
+                    fontsize=10, fontstyle='italic',
+                    bbox=dict(boxstyle='round,pad=0.3', facecolor='lightyellow', alpha=0.8))
+
+        ax.set_xticks(range(len(unique)))
+        ax.set_xticklabels(class_names, rotation=45 if len(class_names) > 4 else 0,
+                           ha='right', fontsize=9)
+        ax.set_ylabel('Count')
+        ax.set_title(DATASET_LABELS[dataset], fontsize=11, fontweight='bold')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+    fig.suptitle('Class Distribution Across Datasets',
+                 fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    path = output_path / 'ch3_class_distribution.png'
+    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    print(f"  Saved: {path.name}")
+
+
+# ============================================================
+# Figure: Runtime Comparison
+# ============================================================
+
+def plot_runtime_comparison(results, output_dir='results/figures'):
+    """Bar chart: training time per T2I method × architecture.
+
+    WHY: Shows computational cost of each approach. A professor
+    might ask 'is the better performance worth the extra compute?'
+    Also useful for practical deployment decisions.
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    cnn_results = [r for r in results if r.get('cnn_arch') in CNN_ARCHS
+                   and r.get('train_time_sec') is not None]
+    if not cnn_results:
+        print("  No CNN results with timing data, skipping runtime plot")
+        return
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
+
+    for idx, dataset in enumerate(DATASETS):
+        ax = axes[idx]
+        ds_results = [r for r in cnn_results if r['dataset'] == dataset]
+        if not ds_results:
+            continue
+
+        # Build matrix: rows=methods, cols=architectures
+        matrix = np.full((len(T2I_METHODS), len(CNN_ARCHS)), np.nan)
+        for r in ds_results:
+            i = T2I_METHODS.index(r['t2i_method'])
+            j = CNN_ARCHS.index(r['cnn_arch'])
+            matrix[i, j] = r['train_time_sec']
+
+        # Grouped bar chart
+        n_methods = len(T2I_METHODS)
+        n_archs = len(CNN_ARCHS)
+        x = np.arange(n_methods)
+        width = 0.8 / n_archs
+        arch_colors = ['#4c72b0', '#55a868', '#c44e52', '#8172b2']
+
+        for j in range(n_archs):
+            vals = matrix[:, j]
+            bars = ax.bar(x + j * width - 0.4 + width/2, vals, width,
+                          label=CNN_LABELS[CNN_ARCHS[j]].split('\n')[0],
+                          color=arch_colors[j], edgecolor='white', linewidth=0.5)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels([T2I_LABELS[m] for m in T2I_METHODS],
+                           rotation=45, ha='right', fontsize=9)
+        ax.set_ylabel('Training Time (s)' if idx == 0 else '')
+        ax.set_title(DATASET_LABELS[dataset].split('\n')[0],
+                     fontsize=11, fontweight='bold')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        if idx == 0:
+            ax.legend(fontsize=8, loc='upper left')
+
+    fig.suptitle('Training Time by T2I Method and Architecture',
+                 fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    path = output_path / 'ch4_runtime_comparison.png'
+    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    print(f"  Saved: {path.name}")
+
+
+# ============================================================
+# Figure: ROC Curves
+# ============================================================
+
+def plot_roc_curves(results, output_dir='results/figures'):
+    """ROC curves: one per dataset, 5 curves (one per T2I method, best arch).
+
+    WHY: Standard ML paper figure. Shows trade-off between true positive
+    rate and false positive rate. More informative than just reporting
+    the ROC-AUC scalar.
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    method_colors = {'naive': '#c44e52', 'tinto': '#8172b2',
+                     'deepinsight': '#4c72b0', 'igtd': '#55a868',
+                     's_igtd': '#ccb974'}
+
+    for idx, dataset in enumerate(DATASETS):
+        ax = axes[idx]
+        ds_results = [r for r in results if r['dataset'] == dataset
+                      and r.get('cnn_arch') in CNN_ARCHS]
+        if not ds_results:
+            continue
+
+        for method in T2I_METHODS:
+            method_results = [r for r in ds_results if r['t2i_method'] == method]
+            if not method_results:
+                continue
+
+            # Use best arch for this method
+            best = max(method_results, key=lambda r: r['f1_macro'])
+
+            # Binary classification ROC
+            if 'roc_curve' in best:
+                fpr = best['roc_curve']['fpr']
+                tpr = best['roc_curve']['tpr']
+                auc_val = best.get('roc_auc', 0)
+                ax.plot(fpr, tpr, color=method_colors.get(method, 'gray'),
+                        linewidth=2, label=f"{T2I_LABELS[method]} (AUC={auc_val:.3f})")
+
+            # Multiclass ROC (one-vs-rest, plot macro average)
+            elif 'roc_curves_per_class' in best:
+                # Average across classes
+                all_tpr = []
+                all_fpr_combined = np.linspace(0, 1, 100)
+                for cls_data in best['roc_curves_per_class'].values():
+                    from numpy import interp
+                    tpr_interp = interp(all_fpr_combined, cls_data['fpr'], cls_data['tpr'])
+                    all_tpr.append(tpr_interp)
+                mean_tpr = np.mean(all_tpr, axis=0)
+                auc_val = best.get('roc_auc', 0)
+                ax.plot(all_fpr_combined, mean_tpr, color=method_colors.get(method, 'gray'),
+                        linewidth=2, label=f"{T2I_LABELS[method]} (AUC={auc_val:.3f})")
+
+        # Diagonal reference line
+        ax.plot([0, 1], [0, 1], 'k--', linewidth=1, alpha=0.5, label='Random')
+        ax.set_xlim([-0.02, 1.02])
+        ax.set_ylim([-0.02, 1.02])
+        ax.set_xlabel('False Positive Rate')
+        ax.set_ylabel('True Positive Rate' if idx == 0 else '')
+        ax.set_title(DATASET_LABELS[dataset].split('\n')[0],
+                     fontsize=11, fontweight='bold')
+        ax.legend(fontsize=8, loc='lower right')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+
+    fig.suptitle('ROC Curves — Best CNN per T2I Method',
+                 fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    path = output_path / 'ch4_roc_curves.png'
+    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    print(f"  Saved: {path.name}")
+
+
+# ============================================================
+# Figure: Overlap Diagnostics
+# ============================================================
+
+def plot_overlap_diagnostics(output_dir='results/figures'):
+    """Bar chart: OF% and OP% per T2I method per dataset.
+
+    WHY: Quantifies why TINTO might underperform — higher feature
+    overlap means features lose individual identity. This figure
+    directly supports the claim that overlap degrades performance.
+    Uses compute_overlap_all_methods() from overlap_metrics.py.
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    sys.path.insert(0, str(Path(__file__).parent))
+    from src.t2i.overlap_metrics import compute_overlap_all_methods
+    from src.preprocessing import preprocess_dataset
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+
+    all_overlap = {}
+    for dataset in DATASETS:
+        print(f"  Computing overlap for {dataset}...")
+        data = preprocess_dataset(dataset)
+        X_train = data['X_train']
+        y_train = data['y_train']
+        overlap = compute_overlap_all_methods(X_train, y_train, image_size=32)
+        all_overlap[dataset] = overlap
+
+    # Plot OF (Percentage of Overlapped Features)
+    ax = axes[0]
+    n_datasets = len(DATASETS)
+    n_methods = len(T2I_METHODS)
+    x = np.arange(n_datasets)
+    width = 0.8 / n_methods
+    method_colors = {'naive': '#c44e52', 'tinto': '#8172b2',
+                     'deepinsight': '#4c72b0', 'igtd': '#55a868',
+                     's_igtd': '#ccb974'}
+
+    for j, method in enumerate(T2I_METHODS):
+        of_vals = [all_overlap[ds].get(method, {}).get('of_percent', 0) for ds in DATASETS]
+        ax.bar(x + j * width - 0.4 + width/2, of_vals, width,
+               label=T2I_LABELS[method], color=method_colors.get(method, 'gray'),
+               edgecolor='white', linewidth=0.5)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([DATASET_LABELS[ds].split('\n')[0] for ds in DATASETS],
+                       fontsize=10)
+    ax.set_ylabel('Overlapped Features (%)')
+    ax.set_title('Feature Overlap (OF)', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=8)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    # Plot OP (Percentage of Overlapped Pixels)
+    ax = axes[1]
+    for j, method in enumerate(T2I_METHODS):
+        op_vals = [all_overlap[ds].get(method, {}).get('op_percent', 0) for ds in DATASETS]
+        ax.bar(x + j * width - 0.4 + width/2, op_vals, width,
+               label=T2I_LABELS[method], color=method_colors.get(method, 'gray'),
+               edgecolor='white', linewidth=0.5)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([DATASET_LABELS[ds].split('\n')[0] for ds in DATASETS],
+                       fontsize=10)
+    ax.set_ylabel('Overlapped Pixels (%)')
+    ax.set_title('Pixel Overlap (OP)', fontsize=12, fontweight='bold')
+    ax.legend(fontsize=8)
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+
+    fig.suptitle('T2I Image Quality: Feature and Pixel Overlap Diagnostics',
+                 fontsize=14, fontweight='bold', y=1.02)
+    plt.tight_layout()
+    path = output_path / 'ch4_overlap_diagnostics.png'
+    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    plt.close(fig)
+    print(f"  Saved: {path.name}")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Generate Chapter 4 figures')
     parser.add_argument('--heatmap-only', action='store_true')
@@ -598,6 +891,18 @@ def main():
 
     print("\n=== Figure 4.10: Density vs Performance ===")
     plot_density_vs_performance(results)
+
+    print("\n=== New: ROC Curves ===")
+    plot_roc_curves(results)
+
+    print("\n=== New: Runtime Comparison ===")
+    plot_runtime_comparison(results)
+
+    print("\n=== New: Class Distribution ===")
+    plot_class_distribution()
+
+    print("\n=== New: Overlap Diagnostics ===")
+    plot_overlap_diagnostics()
 
     print(f"\nAll figures saved to {Path(args.results_dir) / 'figures'}/")
 

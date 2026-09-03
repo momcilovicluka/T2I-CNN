@@ -10,7 +10,7 @@ import torch
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, average_precision_score, confusion_matrix,
-    classification_report
+    classification_report, roc_curve, precision_recall_curve
 )
 
 
@@ -79,6 +79,11 @@ def _compute_metrics(y_true, y_pred, y_probs, num_classes):
             if num_classes == 2:
                 results['roc_auc'] = roc_auc_score(y_true, y_probs[:, 1])
                 results['pr_auc'] = average_precision_score(y_true, y_probs[:, 1])
+                # Save curve data for ROC plot
+                fpr, tpr, _ = roc_curve(y_true, y_probs[:, 1])
+                prec_arr, rec_arr, _ = precision_recall_curve(y_true, y_probs[:, 1])
+                results['roc_curve'] = {'fpr': fpr.tolist(), 'tpr': tpr.tolist()}
+                results['pr_curve'] = {'precision': prec_arr.tolist(), 'recall': rec_arr.tolist()}
             else:
                 results['roc_auc'] = roc_auc_score(
                     y_true, y_probs, multi_class='ovr', average='macro'
@@ -86,6 +91,14 @@ def _compute_metrics(y_true, y_pred, y_probs, num_classes):
                 results['pr_auc'] = average_precision_score(
                     y_true, y_probs, average='macro'
                 )
+                # Per-class ROC curves for multiclass (one-vs-rest)
+                results['roc_curves_per_class'] = {}
+                for c in range(num_classes):
+                    binary_true = (np.array(y_true) == c).astype(int)
+                    fpr, tpr, _ = roc_curve(binary_true, y_probs[:, c])
+                    results['roc_curves_per_class'][str(c)] = {
+                        'fpr': fpr.tolist(), 'tpr': tpr.tolist()
+                    }
         except Exception:
             results['roc_auc'] = 0.0
             results['pr_auc'] = 0.0
