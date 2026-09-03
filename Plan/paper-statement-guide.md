@@ -1089,3 +1089,24 @@ TINTOlib source):**
 - Transfer delta is within-dataset only: bars of
   (F1_pretrained − F1_from-scratch) share F1 label semantics inside a
   dataset (PART 13e) but are NOT comparable across datasets.
+
+## PART 16: Per-cell T2I re-fit semantics (2026-09-03, pre-restart audit)
+
+Each CNN cell independently calls `T2ITransformer.fit()` + `transform()`
+(run_all.py step 2-3), i.e. the T2I mapping for a dataset is recomputed
+once per architecture (3x per dataset, e.g. 3 identical TINTO fits on
+adult). This is deliberate, not an oversight:
+
+- **Isolation:** each cell is a self-contained pipeline with nothing
+  shared between cells, so no cross-cell state can leak or drift.
+- **Determinism:** fit is seeded (global seed 42 per cell), so the 3
+  recomputed mappings are identical; metrics are unaffected by the
+  repetition.
+- **Honest timing:** `t2i_time_sec`/`total_time_sec` therefore measure
+  the true per-cell wall clock, including the repeated fit. A cached
+  design would lower wall time but not change any metric.
+
+Paper wording if asked: "the tabular-to-image mapping is regenerated
+for every experiment cell; since fitting is deterministic (fixed seed),
+the three copies per dataset are identical, and the per-cell timing
+reported in Figure X reflects the real cost of a standalone run."

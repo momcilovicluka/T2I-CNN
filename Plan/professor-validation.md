@@ -482,3 +482,64 @@ B. Per-cell time fields (10.2): edit run_all.py (steps 2-3 timing,
 C. Confusion-matrix labels (10.3): visualize.py only.
 D. Verify the dry-bean per-class parser against the first real result
    (10.5) before using figure 4.5 in the paper.
+
+
+## 11. Third pass — pre-restart review (2026-09-03, before Colab rerun)
+
+Scope: everything a professor would question that is fixable BEFORE the
+run restarts on Colab. Code paths newly traced this pass: class-weight
+scope, baseline data scope, best-model selection, eval normalization,
+model persistence, default grid composition.
+
+### 11.1 Verified clean (fresh checks)
+- Class weights: `compute_class_weights(y_train)` (run_all.py:230) uses
+  the training split only — no val/test leakage into the loss.
+- Baselines train on X_train ONLY, same rows as CNNs (run_all.py
+  comment documents the earlier train+val unfairness was fixed).
+- Best-model checkpointing and early stopping both key on validation
+  LOSS (train.py) — consistent; reported numbers come from the best-val
+  checkpoint, evaluated once on test.
+- ImageNet normalization applied identically at train and eval time via
+  the `model.pretrained` flag (train.py / evaluate.py).
+- Model weights (.pt) saved unconditionally per cell before the JSON —
+  Grad-CAM pipeline has what it needs; orphan .pt from a killed cell is
+  harmlessly overwritten on resume.
+- Default grid excludes ViT (CPU-infeasible, ~830 s/epoch); the draft
+  (ss 3.3, table 4.1, ss 6) explicitly treats ViT as OUT of the main
+  series. A no-ViT run is a COMPLETE paper, not a reduced one.
+- ARCH_LR['vit']=1e-4 documented with probe evidence (run_all.py FIX
+  comment); hyperparameters were fixed before any run, no tuning on
+  test.
+
+### 11.2 The one action item (process, not code)
+The previous Colab run was started with ViT included and predates the
+latest commits, so its results/ is stale in two ways: (a) any cell run
+before commit 6b07566 lacks total_time_sec (runtime table would be
+non-uniform), (b) cells run before 19bf2ca (Adult '?' handling, naive
+clip) are invalid. Resume only skips cells whose JSON EXISTS, so stale
+JSONs would be silently kept.
+
+Protocol for the restart:
+1. In Colab: `!rm -f results/*.json results/*.pt` (keep figures/).
+2. `!git pull` to the latest commit (includes 6b07566 + 19bf2ca).
+3. Run the DEFAULT grid — `python run_all.py` (36 CNN cells + 9
+   baselines = 45 cells, NO ViT). Do NOT pass `--archs ...vit`.
+4. After completion: `python src/visualize.py` for figures, then
+   `python src/visualize_arrangement.py` and `python src/gradcam.py`.
+
+Expected CPU wall time: breast ~5-10 min, dry bean ~20-60 min, adult
+~2-5 h (TINTO/IGTD per-sample file writes + re-fit per arch dominate),
+baselines ~10-20 min. Total ~3-6 h, safely inside a Colab session.
+
+### 11.3 Honesty notes added to the guide (PART 16)
+- T2I fit+transform re-runs per cell (3x per dataset, one per arch);
+  deterministic (seed 42), identical mappings, no metric impact; the
+  per-cell timing is therefore the true standalone cost. Paper wording
+  provided in the guide.
+
+### 11.4 What to expect (watchlist, already in ss 9.7/10.5)
+- XGBoost plausibly beating most T2I-CNNs on adult = expected,
+  publishable outcome (transformation is lossy).
+- Pretrained-vs-scratch deltas = combined effect (decision b4e9bdd).
+- Verify the dry-bean per-class F1 figure on the FIRST finished dry-bean
+  result (numeric-row parser fix verified, but re-check on real data).
