@@ -114,6 +114,9 @@ def train_model(model, train_loader, val_loader, config):
     best_model_state = None
     epochs_no_improve = 0
 
+    # Check if model is pretrained (needs ImageNet normalization)
+    use_imagenet_norm = getattr(model, 'pretrained', False)
+
     epoch_start = time.time()
     for epoch in range(epochs):
         # --- Training ---
@@ -121,6 +124,9 @@ def train_model(model, train_loader, val_loader, config):
         train_loss = 0.0
         for X_batch, y_batch in train_loader:
             X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+            # Apply ImageNet normalization for pretrained models
+            if use_imagenet_norm:
+                X_batch = imagenet_normalize(X_batch)
             optimizer.zero_grad()
             output = model(X_batch)
             loss = criterion(output, y_batch)
@@ -137,6 +143,8 @@ def train_model(model, train_loader, val_loader, config):
         with torch.no_grad():
             for X_batch, y_batch in val_loader:
                 X_batch, y_batch = X_batch.to(device), y_batch.to(device)
+                if use_imagenet_norm:
+                    X_batch = imagenet_normalize(X_batch)
                 output = model(X_batch)
                 loss = criterion(output, y_batch)
                 val_loss += loss.item() * X_batch.size(0)

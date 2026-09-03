@@ -55,8 +55,11 @@ def generate_gradcam(model, image, target_class, arch, device='cpu'):
     """
     from pytorch_grad_cam import GradCAM
 
+    from src.train import imagenet_normalize
+
     model = model.to(device)
     model.eval()
+    use_imagenet_norm = getattr(model, 'pretrained', False)
 
     target_layer = get_target_layer(model, arch)
     cam = GradCAM(model=model, target_layers=[target_layer])
@@ -64,6 +67,8 @@ def generate_gradcam(model, image, target_class, arch, device='cpu'):
     image_tensor = image.to(device)
     if image_tensor.dim() == 3:
         image_tensor = image_tensor.unsqueeze(0)
+    if use_imagenet_norm:
+        image_tensor = imagenet_normalize(image_tensor)
 
     orig_h, orig_w = image_tensor.shape[2], image_tensor.shape[3]
 

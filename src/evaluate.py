@@ -22,8 +22,11 @@ def evaluate_model(model, test_loader, num_classes, device='cpu'):
         accuracy, precision_macro, recall_macro, f1_macro,
         roc_auc, pr_auc, confusion_matrix, classification_report
     """
+    from src.train import imagenet_normalize
+
     model = model.to(device)
     model.eval()
+    use_imagenet_norm = getattr(model, 'pretrained', False)
 
     all_preds = []
     all_labels = []
@@ -32,6 +35,8 @@ def evaluate_model(model, test_loader, num_classes, device='cpu'):
     with torch.no_grad():
         for X_batch, y_batch in test_loader:
             X_batch = X_batch.to(device)
+            if use_imagenet_norm:
+                X_batch = imagenet_normalize(X_batch)
             output = model(X_batch)
             probs = torch.softmax(output, dim=1)
             _, predicted = output.max(1)
