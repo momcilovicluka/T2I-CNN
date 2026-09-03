@@ -233,6 +233,29 @@ praga $0{,}01$ — jer konvolucije na gotovo praznoj slici uče dominantno
 konstantan pozadinski signal. Gustina se meri po metodi i skupu (slika
 `t2i_density_comparison.png`).
 
+**Slika 3.1–3.3. Raspored atributa (gde svaki postupak upisuje vrednosti):**
+`ch3_feature_layout_breast_cancer.png` (Slika 3.1), `ch3_feature_layout_dry_bean.png`
+(Slika 3.2), `ch3_feature_layout_adult_income.png` (Slika 3.3). Pozicije su
+preuzete iz koordinatnih mapa prilagođenih (fitovanih) modela — za TINTO,
+DeepInsight i IGTD iz TINTOlib `_features_mapping`/`_features_positions`, a za
+naivni postupak izvedene analitički (dopuna do $g \times g$, skaliranje na
+$32\times32$) — pa slike prikazuju stvarno mesto upisa, ne idealizaciju.
+Karakteristični obrasci: naive formira pravilnu mrežu po **ulaznom redosledu**
+kolona; DeepInsight i TINTO grupišu korelisane atribute u lokalne grupe, pri
+čemu veći broj atributa može da padne u isti piksel (vidljive kolizije, koje
+OF meri); IGTD u korišćenoj TINTOlib verziji dodeljuje $d$ atributa **prvim $d$
+pozicijama u redosledu red-po-red** (za $d \leq 32$ svi u jednom redu), pa je
+njegov raspored traka koja samo preuređuje atribute duž reda — što je važno za
+tumačenje rezultata u 6.4.
+
+**Slika 3.4. Sličnost atributa u funkciji rastojanja u slici**
+(`ch4_arrangement_quality.png`): svaka tačka je jedan par atributa — na
+apscisi Euklidovo rastojanje njihovih pozicija u slici, na ordinati
+$|\rho|$ (Pearson-ova korelacija na trening skupu); u naslovu panela dat je
+Spearman-ov koeficijent. Negativan $\rho_S$ znači da korelisani atributi leže
+blizu (namera DeepInsight/TINTO/IGTD rasporeda), vrednost blizu nule odsustvo
+strukture (naive — ulazni redosled). Kvantitativna čitanja data su u 6.4.
+
 ## 3.3 Konvolucione neuronske mreže
 
 Konvolucioni sloj računa, za izlazni kanal $k$ i poziciju $(i,j)$,
@@ -1088,8 +1111,14 @@ nadmašuje XGBoost i na kojoj margini; napomena da su baselajni nepodešeni].
 
 - Uporediti `resnet` (pretrenirani) sa `resnet_scratch` (isti kapacitet, bez
   pretreniranosti) po metodi i skupu → efekat pretreniranosti.
-- [TBD]; diskutovati u svetlu sintetičke prirode slika (odeljak 3.4) i
-  činjenice da su pretrenirani modeli primali ImageNet normalizovan RGB ulaz.
+- **Slika 6.1. Efekat transfer učenja** (`ch4_transfer_delta.png`): po metodi
+  i skupu prikazana je razlika $\Delta F1 = F1_{\text{pretrenirani}} -
+  F1_{\text{od nule}}$ u procentnim poenima (zelene šipke — pozitivan efekat
+  pretreniranosti, crvene — negativan transfer). Poređenje je kontrolisano:
+  arhitekture su identične (ResNet-18) i razlikuju se samo po pretreniranosti;
+  uporedive su vrednosti unutar skupa (ista semantika F1), ne i među skupovima.
+- [TBD vrednosti]; diskutovati u svetlu sintetičke prirode slika (odeljak 3.4)
+  i činjenice da su pretrenirani modeli primali ImageNet normalizovan RGB ulaz.
 - (Samo ako je ViT ponovo uključen: proveriti da li svaka ćelija pokazuje
   pad trening gubitka ispod ~0,7 u prvim epohama — potvrda ispravne stope
   učenja, odeljak 5.9.)
@@ -1098,6 +1127,14 @@ nadmašuje XGBoost i na kojoj margini; napomena da su baselajni nepodešeni].
 
 - Primeri slika po metodi i skupu: `t2i_comparison_{dataset}.png`.
 - Gustina: `t2i_density_comparison.png`; preklapanje: `ch4_overlap_diagnostics.png`.
+- Raspored atributa (Slika 3.1–3.3) i sličnost vs. rastojanje (Slika 3.4):
+  izmerene vrednosti pre eksperimenata (samo trening skup) — Breast Cancer:
+  TINTO $\rho_S = -0{,}36$ i DeepInsight $-0{,}43$ (korelisani atributi blizu;
+  naive $\approx 0$, IGTD traka $\approx 0$); Dry Bean: TINTO $-0{,}37$,
+  DeepInsight $-0{,}29$; Adult Income (104 one-hot obeležja): TINTO i
+  DeepInsight **pozitivno** $\rho_S$ (+0,48 / +0,51) uz 78, odnosno 70 od 104
+  atributa u koliziji (dele piksel) — gužva na $32\times32$ koju treba povezati
+  sa F1 u 6.1.3 [TBD — da li je prostorni raspored zaista izgubljen].
 - Grad-CAM (`ch4_gradcam_{dataset}.png`): [TBD — koji pikseli/regioni
   najviše doprinose klasifikaciji; interpretabilnost na ShallowCNN].
 
@@ -1215,15 +1252,16 @@ ViT-Base/16 (nalaz o stopi učenja $10^{-4}$ iz §3.4 već je pripremljen).
 | Raspodela klasa | `results/figures/ch3_class_distribution.png` | 4.1 |
 | Preklapanje (OF/OP) | `results/figures/ch4_overlap_diagnostics.png` | 3.2.6 |
 | Grad-CAM | `results/figures/ch4_gradcam_{dataset}.png` | 6.4 |
-| Uticaj transfer učenja (Δ F1) | `results/figures/ch4_transfer_delta.png` | 6.3 |
-| Raspored atributa po metodi | `results/figures/ch3_feature_layout_{dataset}.png` | 3.2/5.x |
-| Sličnost vs. piksel-udaljenost | `results/figures/ch4_arrangement_quality.png` | 3.2.6 |
+| Uticaj transfer učenja (Δ F1), Slika 6.1 | `results/figures/ch4_transfer_delta.png` | 6.3 |
+| Raspored atributa po metodi, Slika 3.1–3.3 | `results/figures/ch3_feature_layout_{dataset}.png` | 3.2.6 |
+| Sličnost vs. piksel-udaljenost, Slika 3.4 | `results/figures/ch4_arrangement_quality.png` | 3.2.6/6.4 |
 
-> Slika 3.2x/3.2y (novo, bez eksperimenata — računa se iz trening skupa i
-> koordinata T2I metoda; skripta `src/visualize_arrangement.py`): raspored
-> atributa pokazuje GDE svaka metoda upisuje vrednosti na 32×32; Δ-F1 slika
-> (potrebni rezultati CNN serije) prikazuje resnet − resnet_scratch po metodi
-> i skupu — direktan odgovor na RQ2 (transfer učenje).
+> Slike 3.1–3.4 i 6.1: raspored i sličnost-vs-rastojanje računaju se bez
+> eksperimenata (iz trening skupa i koordinata T2I metoda, skripta
+> `src/visualize_arrangement.py`); Δ-F1 slika 6.1 zahteva rezultate CNN serije
+> i prikazuje resnet − resnet_scratch po metodi i skupu — direktan odgovor na
+> RQ2 (transfer učenje). Numerisane slike u §3.2.6, 6.3 i 6.4; napomene o
+> poštenom tumačenju u `paper-statement-guide.md` PART 15d.
 
 **Prilog B — Kontrolna lista pri popunjavanju rezultata** (sve tvrdnje moraju
 odgovarati kodu — svaka ima zabeležen razlog u `Plan/paper-statement-guide.md`):
