@@ -116,7 +116,8 @@ protokol** (iste podele podataka, isti hiperparametri, isti način evaluacije)
 primenjen je na sve kombinacije postupaka i arhitektura, uz eksplicitne
 kontrolne eksperimente (ablacije) kojima se proverava da li prostorna struktura
 uopšte doprinosi rezultatu. Dodatno, rad transparentno beleži i dijagnostikuje
-poznate zamke protokola — jednokratnu podelu skupa, nepodešene baselajne,
+poznate zamke protokola — jednokratnu podelu skupa, nepodešene baselajne
+(osim balansiranih težina klasa, videti 4.5 i PART 13b),
 različite opsege vrednosti piksela između metoda i izbor stope učenja za
 pretrenirane modele — što u literaturi često ostaje nedokumentovano.
 
@@ -1111,7 +1112,8 @@ podešavanje — bez nje transfer učenje na T2I slikama jednostavno ne radi.
 ## 6.2 Poređenje sa baselajnima
 
 Slika `ch4_baseline_comparison.png`; [TBD — da li neka CNN+T2I kombinacija
-nadmašuje XGBoost i na kojoj margini; napomena da su baselajni nepodešeni].
+nadmašuje XGBoost i na kojoj margini; napomena da su baselajni nepodešeni,
+uz balansirane težine klasa (PART 13b)].
 
 ## 6.3 Transfer učenje
 
@@ -1181,7 +1183,8 @@ poređenja metoda treba čitati **unutar** svake arhitekture.
 1. Jedna stratifikovana podela po skupu — bez procene varijanse (bez unakrsne
    validacije i više pokretanja).
 2. Mali broj primera (posebno Breast Cancer, 398 trening) uz duboke modele.
-3. Baselajni (RF/XGB/MLP) nepodešeni — razlike CNN vs baselajn mogu se
+3. Baselajni (RF/XGB/MLP) nepodešeni, osim balansiranih težina klasa —
+   razlike CNN vs baselajn mogu se
    promeniti pod podešavanjem.
 4. Fiksni hiperparametri za sve metode mogu pojedinoj metodi uskratiti njen
    optimalni režim.
@@ -1280,7 +1283,8 @@ odgovarati kodu — svaka ima zabeležen razlog u `Plan/paper-statement-guide.md
       fajlova; `*_vit*` fajlovi samo ako je ViT eksplicitno uključen).
 - [ ] U tabelama F1 označiti: makro (Dry Bean) / pozitivna klasa (BC, Adult);
       nigde reč „makro“ za binarne skupove (PART 13e).
-- [ ] Navesti da su baselajni nepodešeni i da CNN hiperparametri nisu podešavani
+- [ ] Navesti da su baselajni nepodešeni (uz balansirane težine klasa,
+      PART 13b) i da CNN hiperparametri nisu podešavani
       po metodi (PART 13b, 1.3).
 - [ ] Navesti jednu podelu 70/10/20 bez CV (PART 1.1) i da su svi modeli trenirani
       na istim trening redovima (PART 11.3).

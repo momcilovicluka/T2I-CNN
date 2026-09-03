@@ -192,6 +192,7 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     config = DATASET_CONFIG[dataset]
     num_classes = config['num_classes']
     image_size = config['image_size']
+    cell_start = time.time()
 
     # 1. Load and preprocess dataset
     print(f"  Loading {dataset}...")
@@ -200,7 +201,12 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     y_train, y_val, y_test = data['y_train'], data['y_val'], data['y_test']
 
     # 2. Fit T2I transformer on training data only (no leakage)
+    # t2i_time_sec covers fit + all transforms (professor-validation
+    # 10.2): for TINTO the per-sample file writes dominate wall time,
+    # and the runtime figure compares T2I methods, so CNN-only
+    # train_time_sec alone would understate the method's cost.
     print(f"  Fitting T2I: {t2i_method}...")
+    t2i_start = time.time()
     t2i = T2ITransformer(method=t2i_method, image_size=image_size)
     t2i.fit(X_train, y_train)
 
@@ -208,6 +214,7 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     train_imgs = t2i.transform(X_train, y_train)
     val_imgs = t2i.transform(X_val, y_val)
     test_imgs = t2i.transform(X_test, y_test)
+    t2i_time = time.time() - t2i_start
 
     # 4. Create DataLoaders
     train_loader, val_loader = prepare_loaders(
@@ -263,6 +270,8 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     metrics['image_size'] = image_size
     metrics['lr'] = train_config['lr']
     metrics['train_time_sec'] = round(train_time, 1)
+    metrics['t2i_time_sec'] = round(t2i_time, 1)
+    metrics['total_time_sec'] = round(time.time() - cell_start, 1)
     metrics['epochs_trained'] = len(history['train_loss'])
     metrics['final_train_loss'] = history['train_loss'][-1]
     metrics['final_val_loss'] = history['val_loss'][-1]
@@ -352,6 +361,9 @@ def run_baseline(dataset, model_type, output_dir='results'):
     metrics['train_samples'] = len(X_train)
     metrics['test_samples'] = len(X_test)
     metrics['train_time_sec'] = round(train_time, 1)
+    # Baselines have no T2I step; fit+eval IS the whole cell.
+    metrics['t2i_time_sec'] = 0.0
+    metrics['total_time_sec'] = round(train_time, 1)
 
     # 4. Save results (atomic write)
     output_path = Path(output_dir)

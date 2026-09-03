@@ -414,6 +414,8 @@ wording to "default hyperparameters with balanced class weighting" in
 guide PART 13b and the draft.
 
 ### 10.2 FINDING — runtime figure ignores T2I generation time (MEDIUM/LOW)
+[RESOLVED 2026-09-03: run_all.py records t2i_time_sec + total_time_sec per
+cell (baselines: total==fit+eval); visualize.py uses total with fallback.]
 train_time_sec wraps ONLY train_model() (run_all.py step 8). The T2I
 fit/transform (steps 2-3), which for TINTO writes one file per sample,
 is excluded — yet the figure's purpose (ch4_runtime_comparison,
@@ -427,6 +429,7 @@ train_time_sec only if the field is absent (old cells). Do this before
 the final suite runs so every cell carries the field.
 
 ### 10.3 FINDING — confusion matrices lack class labels (LOW, presentational)
+[RESOLVED 2026-09-03: per-dataset class-name ticks from loader class_names.]
 ch4_confusion_matrices plots raw integer cells with no row/column tick
 labels; for dry_bean's 7 classes this is unreadable without the class
 legend. Fix in visualize.py: per-dataset class-name ticks (binary
@@ -446,7 +449,9 @@ labels from the loaders; dry_bean 7 names). No rerun needed.
 - visualize.BASELINES keys match run_all baseline cnn_arch values; the
   baseline bar chart is correctly wired.
 
-### 10.5 Minor notes (document, no code)
+### 10.5 Minor notes (mostly documented; one fixed)
+[FIXED 2026-09-03: dry-bean per-class F1 parser now reads numeric report
+rows by class id — the old name-based parser produced all-zero bars.]
 - adult_income: a category present only in test produces a
   constant-zero training column; sklearn StandardScaler handles
   zero-variance columns (scale->1) so this is benign; mention once.

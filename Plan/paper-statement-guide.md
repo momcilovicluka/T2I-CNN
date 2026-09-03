@@ -757,7 +757,7 @@ hyperparameter policy (PART 1.3 / 2.4).
 TINTOlib reference defaults; only the canvas size (32x32), random
 seed, output format, and TINTO's blurring were set explicitly."
 
-### 13b. Baselines deliberately untuned (decision, must state)
+### 13b. Baselines untuned except balanced class weighting (decision, must state)
 
 RF (n_estimators=100, max_depth=None, min_samples_split=2), XGBoost
 (n_estimators=100, max_depth=6, learning_rate=0.1, mlogloss) and MLP
@@ -766,12 +766,21 @@ use reference/library-default values with no per-model search — the
 same no-tuning policy as the CNNs. Module docstrings in
 src/baselines/*.py give the inclusion rationale for each model.
 
+The one deliberate deviation from library defaults is balanced
+class weighting, mirroring the inverse-frequency class weights used
+in the CNN loss: RF class_weight='balanced'; XGBoost and MLP receive
+per-sample balanced weights computed with sklearn
+compute_class_weight (professor-validation 10.1). Without it,
+imbalanced sets would handicap the baselines in a comparison where
+the CNN family was already given an imbalance remedy.
+
 **Paper statement (limitations):** "Baseline classifiers used
-untuned reference configurations; no hyperparameter search was
-performed for any model in the study (CNNs or baselines)." This
-answers the "strawman baseline" critique: the comparison is
-untuned-vs-untuned, and CNN-vs-baseline gaps may widen under
-tuning — future work.
+reference configurations with balanced class weighting and no
+hyperparameter search; no model in the study (CNNs or baselines) was
+tuned per dataset." This answers the "strawman baseline" critique:
+the comparison is untuned-vs-untuned (modulo the shared imbalance
+remedy), and CNN-vs-baseline gaps may widen under tuning — future
+work.
 
 ### 13c. Ablation study hyperparameters (rationale recorded here)
 
