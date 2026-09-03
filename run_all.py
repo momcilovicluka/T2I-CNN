@@ -218,7 +218,14 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     model_file = output_path / f"{dataset}_{t2i_method}_{cnn_arch}_model.pt"
     torch.save(model.state_dict(), model_file)
 
-    # 12. Save results
+    # 12. Save results (atomic write)
+    # FIX (audit): Was a direct open(result_file, 'w') — a kill mid-write
+    # (Ctrl+C, Colab timeout) left a truncated JSON that the resume logic
+    # (exists() check) would SKIP forever, silently losing the experiment
+    # from aggregate_results and disabling the persisted t2i_pixel_range.
+    # Now writes to .json.tmp and atomically renames, matching run_baseline.
+    # Note: model .pt is saved first; a kill between the two writes leaves
+    # an orphan .pt that the resume re-run simply overwrites (harmless).
     result_file = output_path / f"{dataset}_{t2i_method}_{cnn_arch}.json"
 
     # Convert numpy types for JSON serialization
@@ -231,8 +238,11 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
             return obj.tolist()
         return obj
 
-    with open(result_file, 'w') as f:
+    import os
+    tmp_file = result_file.with_suffix('.json.tmp')
+    with open(tmp_file, 'w') as f:
         json.dump(metrics, f, indent=2, default=to_serializable)
+    os.replace(str(tmp_file), str(result_file))
 
     print(f"  -> {result_file.name}: F1={metrics['f1_macro']:.4f}, "
           f"Acc={metrics['accuracy']:.4f} ({train_time:.0f}s)")
