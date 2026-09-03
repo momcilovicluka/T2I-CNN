@@ -36,6 +36,22 @@ DATASET_CONFIG = {
     'adult_income': {'num_classes': 2, 'image_size': 32},
 }
 
+# Per-architecture learning rates.
+# FIX (2026-09-03, probe-verified): the shared lr=1e-3 makes pretrained
+# ViT-B/16 diverge on sparse T2I inputs — train loss pinned at log(2)
+# (~0.698) for 20 epochs, val acc stuck at class priors, F1~0. Fine-tuning
+# a pretrained ViT at lr=1e-3 is ~100x the established range (timm
+# practice ~1e-5..1e-4). Probe on breast_cancer/tinto: at lr=1e-4 the
+# same setup reaches ~0.91 val acc within 5 epochs and 0.42 train loss
+# by epoch 8. From-scratch models and pretrained ResNet-18 (BatchNorm
+# robustness) converge fine at 1e-3, so only ViT is lowered.
+ARCH_LR = {
+    'shallow': 1e-3,
+    'resnet': 1e-3,
+    'resnet_scratch': 1e-3,
+    'vit': 1e-4,
+}
+
 
 class ProgressTracker:
     """Track experiment progress with ETA and resume support."""
@@ -188,7 +204,7 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     # 7. Training config
     train_config = {
         'epochs': 50,
-        'lr': 1e-3,
+        'lr': ARCH_LR[cnn_arch],
         'weight_decay': 1e-4,
         'early_stopping_patience': 15,
         'label_smoothing': 0.1,
@@ -224,6 +240,7 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     metrics['train_samples'] = len(X_train)
     metrics['test_samples'] = len(X_test)
     metrics['image_size'] = image_size
+    metrics['lr'] = train_config['lr']
     metrics['train_time_sec'] = round(train_time, 1)
     metrics['epochs_trained'] = len(history['train_loss'])
     metrics['final_train_loss'] = history['train_loss'][-1]
