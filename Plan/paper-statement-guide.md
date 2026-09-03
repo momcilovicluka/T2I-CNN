@@ -442,18 +442,24 @@ ViT/ResNet never learned (train loss stuck at ~0.70, val acc oscillating
 between 0.63/0.37 = always predicting one class) while from-scratch
 models (which use BatchNorm) survived.
 
-**Fix:** Each T2I wrapper now rescales images to [0,1] using pixel
-min/max cached from the training split only (no leakage), producing
-comparable inputs across all methods. Verified: TINTO+ResNet converges
-immediately after the fix (val acc 0.84 → 0.965 in 5 epochs).
+**Fix (as committed in 0e20179):** A train-derived [0,1] rescale cache
+was added to all four TINTOlib wrappers (tinto, deepinsight, igtd,
+s_igtd). Subsequent audit (99432a1, see 10b) showed DeepInsight/IGTD/
+S-IGTD already output [0,1] natively and removed their caches — in the
+final code only TINTO rescales via the train-derived cache, while
+Naive normalizes with train min/max stored in fit() (see section 2.2).
+Verified: TINTO+ResNet converges immediately after the fix (val acc
+0.84 → 0.965 in 5 epochs).
 
-**Paper statement (reproducibility/methodology):** "All T2I methods
-produce single-channel images normalized to [0,1] using statistics
-computed from the training split, so pretrained backbones receive
-comparable input distributions. An earlier implementation where TINTO
-images were left in their raw sub-range (max ≈ 0.30) made all pixels
-negative after ImageNet normalization and prevented pretrained models
-from learning; this was corrected before the final experiments."
+**Paper statement (reproducibility/methodology):** "T2I images are
+normalized to [0,1]: Naive and TINTO rescale using statistics from the
+training split only (no leakage), DeepInsight is scaled by TINTOlib's
+internal feature MinMaxScaler, and IGTD/S-IGTD divide their raw [0,255]
+output by 255; all outputs are clipped to [0,1]. This gives pretrained
+backbones comparable input distributions. An earlier implementation
+left TINTO images in a compressed sub-range (max ≈ 0.30), making all
+pixels negative after ImageNet normalization and preventing pretrained
+models from learning; this was corrected before the final experiments."
 
 **Process note:** All results from runs before 0e20179 are INVALID and
 must be discarded (they were produced with either no T2I rescaling or
@@ -539,10 +545,12 @@ model constructor (tinto.py line 64, igtd.py line 43, s_igtd.py line
 96, deepinsight.py line 35), and `set_global_seed(42)` is called before
 every experiment and baseline (run_all.py lines 154 and 279). TINTO in
 particular uses `algorithm='PCA'` + `random_seed=42`, so its
-feature-to-pixel mapping and image generation are deterministic for a
-given training split. The pixel rescale statistics are cached from the
-training split (see 10a/10b), so val/test transforms are deterministic
-too.**
+feature-to-pixel mapping and image generation are deterministic for
+a given training split. For TINTO, the pixel rescale statistics are cached from the
+training split (see 10a/10b); for Naive they are stored in fit(); and
+for IGTD/S-IGTD the /255 divisor is a constant — so in every method the
+val/test scaling is fixed at fit time, making val/test transforms
+deterministic too.**
 
 **Paper statement:** "For each dataset, the feature-to-pixel mapping
 was fitted once on the training split with a fixed seed
