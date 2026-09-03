@@ -41,7 +41,7 @@ both factors.
 
 ### 1.3 Fixed Hyperparameters
 **Write:** "All experiments used identical hyperparameters (learning
-rate=1e-3, epochs=50, early stopping patience=10, weight decay=1e-4,
+rate=1e-3, epochs=50, early stopping patience=15, weight decay=1e-4,
 label smoothing=0.1) regardless of T2I method or CNN architecture.
 This ensures fair comparison but may disadvantage architectures that
 require different tuning (e.g., ResNet-18 typically needs lower
@@ -155,10 +155,16 @@ inflated accuracy metrics.
 
 ### 2.4 Training Configuration
 **Write:** "All models were trained with Adam optimizer (lr=1e-3,
-weight_decay=1e-4), early stopping (patience=10 on validation loss),
+weight_decay=1e-4), early stopping (patience=15 on validation loss),
 learning rate scheduling (ReduceLROnPlateau, factor=0.5, patience=5),
 and label smoothing (0.1). Maximum 50 epochs. All experiments used
 fixed random seed (42) for reproducibility."
+
+**Why patience=15:** The LR scheduler halves the learning rate after
+5 epochs without validation improvement. With early stopping patience
+of 10, only 5 epochs remained after an LR drop for the model to recover
+and show improvement — often not enough. Patience of 15 gives 10 epochs
+post-LR-drop to settle into a better minimum before stopping.
 
 **Why:** Must document exact training setup for reproducibility.
 
@@ -209,10 +215,24 @@ zero-padded regions."
 ### 4.2 Why ImageNet Normalization for Pretrained Models
 **Write:** "Pretrained ResNet-18 and ViT inputs were normalized using
 ImageNet statistics (mean=[0.485, 0.456, 0.406], std=[0.229, 0.224,
-0.225]) after converting grayscale to RGB by channel repetition."
+0.225]) after converting grayscale to RGB by channel repetition.
+Pretrained models were instantiated with a 3-channel first convolution
+layer so the original ImageNet weights are retained and receive
+properly normalized RGB input."
+
+**Why this matters (bug found in audit):** The normalization function
+initially existed but was NOT applied during training — pretrained
+models received raw [0,1] grayscale images, breaking the pretrained
+feature extractors and causing degenerate behavior (models predicting
+only the majority class, oscillating between 0.63/0.37 accuracy on
+breast cancer). After the fix, pretrained models converge normally.
+Any results produced before this fix (commit e192b60) for pretrained
+models are INVALID and must be discarded.
 
 **References:**
-- src/train.py lines 203-220: imagenet_normalize() and constants
+- src/train.py: imagenet_normalize() and constants, applied when
+  model.pretrained=True in train_model()
+- src/run_all.py create_cnn_model(): input_channels=3 for pretrained
 
 ### 4.3 Why Class Weights With sklearn
 **Write:** "Class weights were computed using sklearn compute_class_weight
@@ -322,3 +342,84 @@ variance and ensure statistical significance of observed differences."
 - OF (Overlapped Features) and OP (Overlapped Pixels) metrics
 - Quantify lossy compression in projection-based methods
 - Reference: DeepInsight FDM analysis (Sharma et al., 2019)
+
+---
+
+## PART 9: AUDIT FINDINGS — Bugs Fixed & Their Paper Implications
+
+### 9a. ImageNet Normalization Was Initially Never Applied (CRITICAL)
+
+**What happened:** `imagenet_normalize()` was defined in `src/train.py`
+but never called. Pretrained ResNet-18/ViT received raw [0,1] grayscale
+images instead of ImageNet-normalized RGB.
+
+**Observed symptom:** ViT oscillated between predicting all-majority-class
+(acc=0.6316) and all-minority-class (acc=0.3684) — exactly the val set
+class proportions (63.2%/36.8%). Not learning.
+
+**Fix:** Apply normalization whenever `model.pretrained=True`, and build
+pretrained models with `input_channels=3` so the original 3-channel
+conv1 weights are kept (commit e192b60 + 6692c79).
+
+**Paper statement (reproducibility section):** "Pretrained models
+received ImageNet-normalized RGB input via channel repetition. A
+preliminary implementation that omitted this normalization produced
+degenerate majority-class predictions and was corrected before the
+final experiments." (Only state this if a reviewer could compare
+against earlier bad runs; otherwise just describe the correct method.)
+
+### 9b. Baseline Fairness: Same Training Data as CNNs
+
+**What happened:** Baselines (RF/XGBoost/MLP) initially trained on
+train+val combined (e.g., 455 samples for breast cancer) while CNNs
+trained on train only (398) — baselines had ~14% more data.
+
+**Fix:** Baselines now train on `X_train` only. Val is reserved for
+early stopping and is never training data for any model (commit 6692c79).
+
+**Paper statement (methodology):** "All models — CNNs and tabular
+baselines — were trained on the identical training split. The
+validation split was used exclusively for early stopping in CNNs."
+
+### 9c. Cross-Validation Early-Stopping Leakage (Fixed)
+
+**What happened:** `cross_validate()` used the test fold for early
+stopping, leaking test information into model selection. Main pipeline
+did NOT use this function; it was fixed anyway (commit 6692c79).
+
+**Paper statement:** Not needed for main results (single split used).
+If CV results are ever reported, the fixed implementation splits a
+validation subset from the train fold only.
+
+### 9d. Early Stopping Patience 10 → 15
+
+**Why:** Scheduler patience=5 + early stop patience=10 left only 5
+epochs to recover after each LR halving. Changed to 15 (commit 8ed8ab8).
+See section 2.4.
+
+### 9e. ViT Degenerate Behavior on Tiny Datasets (Report as Finding)
+
+**Observed (even after fixes):** ViT-Base (85M params) on breast cancer
+(398 train samples) is massively overparameterized. Expect instability
+and worse results than ShallowCNN. This is a legitimate finding —
+capacity mismatch — NOT a bug. Report it as such and reference
+section 1.4 (Architecture Capacity Mismatch).
+
+### 9f. Grad-CAM Resolution Limitation
+
+**What:** ResNet-18 on 32x32 input produces only 2x2 feature maps at
+layer4 — too small for meaningful Grad-CAM. Used layer3 (4x4) instead.
+ViT has no conv layers (Attention Rollout out of scope).
+
+**Paper statement (visualization section):** "Grad-CAM heatmaps are
+shown for ShallowCNN, which operates at native 32x32 resolution.
+ResNet-18's aggressive downsampling leaves too little spatial
+resolution for interpretable heatmaps on 32x32 inputs."
+
+### 9g. Results Validity Note (Process, not paper text)
+
+Any `results/*.json` produced before commits e192b60/6692c79 with
+pretrained models (resnet, vit) is INVALID — those runs lacked
+ImageNet normalization. Also, baselines from before 6692c79 used
+more training data. Discard and re-run everything after pulling
+the fixes.

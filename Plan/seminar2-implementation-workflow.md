@@ -756,3 +756,24 @@ Total: 60 CNN experiments (5 T2I x 3 datasets x 4 architectures) + 9 baselines (
 - Checkpoint 4: Run all experiments (60 CNN configs + 9 baselines)
 - Checkpoint 5: Generate comparison tables and figures
 - Checkpoint 6: Write the paper
+
+---
+
+## Checkpoint 4.5: Pre-Run Audit (Bugs Found & Fixed)
+
+Found during final audit before the Colab run. All details and paper
+statements in `Plan/paper-statement-guide.md` PART 9.
+
+| # | Issue | Severity | Fix | Commit |
+|---|-------|----------|-----|--------|
+| 1 | imagenet_normalize() never called — pretrained models fed raw [0,1] images | 🔴 CRITICAL | Apply norm when model.pretrained=True; pretrained models use input_channels=3 | e192b60, 6692c79 |
+| 2 | Channel mismatch: imagenet_normalize outputs 3ch but wrappers built 1ch first conv | 🔴 CRITICAL | create_cnn_model: input_channels=3 for resnet/vit, 1 for resnet_scratch | 6692c79 |
+| 3 | Baselines trained on train+val (~14% more data than CNNs) | 🟡 Fairness | Baselines now train on X_train only | 6692c79 |
+| 4 | cross_validate() used test fold for early stopping (leak) | 🔴 Leak (unused fn) | Split val subset from train fold | 6692c79 |
+| 5 | Early stopping patience=10 too short vs scheduler patience=5 | 🟡 Tuning | patience=15 (10 epochs post-LR-drop) | 8ed8ab8 |
+| 6 | Ablations used patience=10, main experiments 15 | 🟡 Consistency | All use 15 | 6692c79 |
+
+**IMPORTANT:** Any results produced before these fixes with pretrained
+models (resnet, vit) or baselines are INVALID. Re-run everything after
+`git pull`. Only shallow + resnet_scratch results were unaffected by
+Issue 1 (no normalization needed), but baselines changed for all.
