@@ -67,7 +67,7 @@ def run_pixel_shuffling_ablation(dataset, t2i_method, cnn_arch, output_dir='resu
     from src.t2i import T2ITransformer
     from src.train import prepare_loaders, train_model, compute_class_weights, set_global_seed
     from src.evaluate import evaluate_model
-    from run_all import create_cnn_model, DATASET_CONFIG
+    from run_all import create_cnn_model, DATASET_CONFIG, ARCH_LR
 
     set_global_seed(42)
     config = DATASET_CONFIG[dataset]
@@ -94,7 +94,7 @@ def run_pixel_shuffling_ablation(dataset, t2i_method, cnn_arch, output_dir='resu
     model = create_cnn_model(cnn_arch, num_classes)
     class_weights = compute_class_weights(y_train)
     config_train = {
-        'epochs': 50, 'lr': 1e-3, 'weight_decay': 1e-4,
+        'epochs': 50, 'lr': ARCH_LR[cnn_arch], 'weight_decay': 1e-4,
         'early_stopping_patience': 15, 'label_smoothing': 0.1,
         'class_weights': class_weights,
         'device': 'cuda' if torch.cuda.is_available() else 'cpu',
@@ -191,7 +191,7 @@ def run_feature_ordering_ablation(dataset, t2i_method, cnn_arch, output_dir='res
     from src.t2i import T2ITransformer
     from src.train import prepare_loaders, train_model, compute_class_weights, set_global_seed
     from src.evaluate import evaluate_model
-    from run_all import create_cnn_model, DATASET_CONFIG
+    from run_all import create_cnn_model, DATASET_CONFIG, ARCH_LR
 
     set_global_seed(42)
     config = DATASET_CONFIG[dataset]
@@ -229,7 +229,7 @@ def run_feature_ordering_ablation(dataset, t2i_method, cnn_arch, output_dir='res
         model = create_cnn_model(cnn_arch, num_classes)
         class_weights = compute_class_weights(y_train)
         config_train = {
-            'epochs': 50, 'lr': 1e-3, 'weight_decay': 1e-4,
+            'epochs': 50, 'lr': ARCH_LR[cnn_arch], 'weight_decay': 1e-4,
             'early_stopping_patience': 15, 'label_smoothing': 0.1,
             'class_weights': class_weights,
             'device': 'cuda' if torch.cuda.is_available() else 'cpu',
@@ -290,7 +290,7 @@ def run_lpft_ablation(dataset, t2i_method, output_dir='results'):
     )
     from src.evaluate import evaluate_model
     from src.models.resnet_wrapper import ResNetWrapper
-    from run_all import DATASET_CONFIG
+    from run_all import DATASET_CONFIG, ARCH_LR
 
     set_global_seed(42)
     config = DATASET_CONFIG[dataset]
@@ -325,7 +325,12 @@ def run_lpft_ablation(dataset, t2i_method, output_dir='results'):
     train_loader, val_loader = prepare_loaders(train_imgs, y_train, val_imgs, y_val)
     # pretrained=True needs input_channels=3 (imagenet_normalize produces RGB)
     model_direct = ResNetWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
-    direct_config = {**base_config, 'lr': 1e-4}
+    # Align with the main table: pretrained ResNet-18 trains at 1e-3 in
+    # run_all (ARCH_LR). This cell reproduces the main-table resnet row,
+    # so it must use the same LR or the ablation figure contradicts the
+    # results table (was 1e-4 -> direct-FT F1 0.935 vs main 0.972 on
+    # breast_cancer/deepinsight).
+    direct_config = {**base_config, 'lr': ARCH_LR['resnet']}
     model_direct, hist_direct = train_model(model_direct, train_loader, val_loader, direct_config)
 
     test_loader = DataLoader(
