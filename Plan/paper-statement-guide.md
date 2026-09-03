@@ -643,3 +643,36 @@ as evidence that ViT cannot use such encodings."
 **Impact:** Any `*_vit.json` result produced before commit defb6fb
 (trained at lr=1e-3) is INVALID — delete and re-run only the ViT
 cells. Non-ViT cells are unaffected (same code path, same LR).
+
+### 12b. Why the LR change is NOT extended to ResNet-18 / from-scratch models (commit 3df3e17)
+
+**Evidence against uniform 1e-4 for all pretrained models
+(breast_cancer/deepinsight, pretrained ResNet-18 direct FT):**
+- lr=1e-3 (main table): F1 = 0.9722
+- lr=1e-4 (old ablation direct-FT): F1 = 0.935
+
+Lowering ResNet-18 to 1e-4 would measurably hurt it; the per-architecture
+choice rests on a *trainability* criterion, not performance tuning:
+ResNet-18 trains at 1e-3, ViT-B/16 does not (cannot fit train, train
+loss pinned at log(2)) and follows the established ViT fine-tuning range
+(1e-5..1e-4). From-scratch models (shallow, resnet_scratch) also stay at
+1e-3 — the divergence mechanism (destroying pretrained features) does
+not apply to them, and a lower LR risks under-convergence within the
+50-epoch budget on dry_bean/adult_income.
+
+**Fairness framing:** the research question compares T2I methods
+*within* each architecture, and within an architecture the LR is
+constant across methods — per-arch LR cannot confound method
+comparisons. Cross-architecture differences were never controlled
+(capacity, PART 1.4) and are discussed as such.
+
+**Ablation alignment (commit 3df3e17):** the LP-FT ablation's
+direct-FT ResNet cell was previously trained at 1e-4 while the main
+table's resnet row trains at 1e-3 — the "same" setup differed
+(0.935 vs 0.9722), so the ablation figure would have contradicted the
+results table. ablation.py now imports ARCH_LR for all its training
+sites, so every ablation cell mirrors the main pipeline. Any
+`ablation_lpft_*.json` produced before 3df3e17 is INVALID (direct-FT
+cell at the wrong LR) — re-run the ablation. LP-FT's own two-phase
+schedule (head 1e-3, then all layers 1e-4) is unchanged; it is the
+procedure under comparison, not a reproduction of the main row.
