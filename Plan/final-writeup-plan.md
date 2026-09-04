@@ -56,10 +56,9 @@ missing and are now generated.
       (01_eda.ipynb vs 01_eda_executed.ipynb) if one supersedes the other.
 
 ### 3.2 Draft/write-up gaps (the actual remaining writing work)
-- [ ] **Sažetak / apstrakt + ključne reči** — the draft has the title-page
-      template but no abstract yet; add a ~half-page Serbian summary with
-      keywords and (optionally) an English version after the conclusion is
-      finalized.
+- [x] **Sažetak / apstrakt + ključne reči** — added (2026-09-04): Serbian
+      summary with keywords and an English abstract, placed between the
+      title page and chapter 1.
 - [ ] **Example T2I figures have no body prose.** t2i_comparison_{dataset}.png
       are listed only in Prilog A; the write-up should give them figure
       numbers and captions and point to them where methods are introduced

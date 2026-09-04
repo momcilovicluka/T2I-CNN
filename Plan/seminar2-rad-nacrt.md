@@ -32,6 +32,65 @@
 
 ---
 
+## Sažetak
+
+Tabelarni podaci nemaju unutrašnju prostornu strukturu, pa se primena
+konvolucionih neuronskih mreža (CNN) na njih svodi na izbor postupka kojim se
+vektor atributa preslikava u sliku (tabular-to-image, T2I). U ovom radu
+upoređena su četiri postupka preslikavanja — naivno pakovanje, projekcione
+metode DeepInsight i TINTO i permutaciona metoda IGTD — na tri heterogena
+skupa (Breast Cancer, Dry Bean, Adult Income) sa tri konvolucione arhitekture
+(ShallowCNN, pretrenirani ResNet-18 i ResNet-18 treniran od nule), uz klasične
+baselajne (Random Forest, XGBoost, MLP) i tri ablacije (mešanje piksela,
+raspored atributa, LP-FT). Eksperimenti su izvedeni po jedinstvenom protokolu
+(jedna stratifikovana podela, fiksni hiperparametri, deterministički seed).
+Rezultati pokazuju da CNN+T2I na skupovima sa umerenim brojem atributa
+dostižu nivo klasičnih metoda (na Breast Cancer 97,22 % naspram RF 96,55 %
+F1 pozitivne klase), dok na Adult Income XGBoost nadmašuje sve CNN+T2I
+kombinacije (71,43 % naspram 68,98 %) — posledica gubitne konverzije
+visokodimenzionalnih one-hot obeležja. Mešanje piksela obara makro-F1 na Dry
+Bean za 85,21 pp, što potvrđuje da CNN zaista koriste prostorni raspored
+atributa. Transfer učenje sa ImageNet-a ne donosi sistematsku prednost na
+sintetičkim T2I slikama; na Adult Income sa naivnim slikama pretrenirani
+ResNet-18 beleži negativan transfer od −11,40 pp u F1, a LP-FT gubi od
+direktnog finog podešavanja. Prostorni raspored jeste relevantan, ali je
+njegov uticaj manji od izbora arhitekture i režima treninga.
+
+**Ključne reči:** konverzija tabelarnih podataka u slike, T2I, DeepInsight,
+TINTO, IGTD, konvolucione neuronske mreže, transfer učenje, XGBoost,
+klasifikacija
+
+---
+
+## Abstract
+
+Tabular data has no intrinsic spatial structure, so applying convolutional
+neural networks (CNNs) to it hinges on the tabular-to-image (T2I) mapping that
+turns a feature vector into an image. This work compares four mappings — naive
+packing, the projection methods DeepInsight and TINTO, and the permutation
+method IGTD — on three heterogeneous datasets (Breast Cancer, Dry Bean, Adult
+Income) with three CNN architectures (ShallowCNN, pretrained ResNet-18, and
+ResNet-18 trained from scratch), against classical baselines (Random Forest,
+XGBoost, MLP) and three ablations (pixel shuffling, feature ordering, LP-FT).
+All experiments follow a single protocol (one stratified split, fixed
+hyperparameters, deterministic seed). The results show that CNN+T2I pipelines
+reach the level of classical methods on datasets with a moderate number of
+features (97.22% vs. 96.55% positive-class F1 over Random Forest on Breast
+Cancer), while on Adult Income XGBoost beats every CNN+T2I combination
+(71.43% vs. 68.98%) — a consequence of the lossy conversion of
+high-dimensional one-hot features. Pixel shuffling drops macro-F1 on Dry Bean by
+85.21 pp, confirming that the CNNs genuinely exploit the spatial arrangement
+of features. ImageNet transfer learning provides no systematic benefit on
+synthetic T2I images: on Adult Income with naive images the pretrained
+ResNet-18 exhibits negative transfer of −11.40 pp in F1, and LP-FT underperforms
+direct fine-tuning. Spatial arrangement matters, yet less than the
+choice of architecture and training regime.
+
+**Keywords:** tabular-to-image conversion, T2I, DeepInsight, TINTO, IGTD,
+convolutional neural networks, transfer learning, XGBoost, classification
+
+---
+
 # 1. Uvod
 
 U velikom broju praktičnih domena podaci su organizovani **tabelarno** — svaki
@@ -260,6 +319,45 @@ $|\rho|$ (Pearson-ova korelacija na trening skupu); u naslovu panela dat je
 Spearman-ov koeficijent. Negativan $\rho_S$ znači da korelisani atributi leže
 blizu (namera DeepInsight/TINTO/IGTD rasporeda), vrednost blizu nule odsustvo
 strukture (naive — ulazni redosled). Kvantitativna čitanja data su u 6.4.
+
+### 3.2.7 Primeri generisanih slika po skupovima
+
+Slika 3.5–3.7 prikazuju stvarne ulaze CNN-a u eksperimentima: za svaki skup
+izdvojena su po dva primera iz svake klase (redovi), a kolone odgovaraju
+četiri postupka — naivnom, TINTO, DeepInsight i IGTD. Sve slike su $32	imes32$
+i normalizovane na $[0,1]$ po postupku (odeljak 5.6), dakle identične onima koje
+modeli vide tokom treninga i evaluacije. Razlike medju postupcima čitaju se na
+tri nivoa: *gde* se vrednost atributa upisuje (raspored), *koliko* piksela
+nosi signal (gustina, odeljak 3.2.6) i *kako* se susedstva formiraju (šta
+konvoluciona jezgra zahvataju lokalno).
+
+**Slika 3.5. Primeri preslikavanja — Breast Cancer (30 atributa)**
+(`t2i_comparison_breast_cancer.png`): po dva benigna i dva maligna uzorka;
+30 kliničkih atributa upisuje se u redove po redosledu kolona (naivni),
+projektovanih koordinata (DeepInsight, TINTO), odnosno preuređenog redosleda
+(IGTD, traka). Naivni postupak zadržava blokovski, „redosledni“ izgled bez
+prostorne grupisanosti; TINTO i DeepInsight doprinose širenju vrednosti oko
+svojih pozicija, pa se korelisani atributi približavaju (uporediti sa Slika
+3.1 i 3.4).
+
+**Slika 3.6. Primeri preslikavanja — Dry Bean (16 atributa)**
+(`t2i_comparison_dry_bean.png`): po dva primera iz svake od sedam klasa
+(14 redova). Sa svega 16 atributa slike su retke — najveći deo platna ostaje
+na pozadini; IGTD traka i naivni raspored koncentrišu signal u mali broj
+piksela, dok TINTO/DeepInsight širenjem popunjavaju okolinu pozicija (gustina
+po metodi merena je u 3.2.6). Ovakva retkost objašnjava zašto sve metode na
+ovom skupu postižu bliske rezultate (6.1.2).
+
+**Slika 3.7. Primeri preslikavanja — Adult Income (104 obeležja)**
+(`t2i_comparison_adult_income.png`): po dva primera iz svake od dve klase
+(`<=50K`, `>50K`). Dominantno one-hot obeležja čine slike gustim; pri 104
+atributa na $32	imes32$ dolazi do kolizija — više atributa deli isti piksel
+(npr. 78 od 104 kod TINTO-a, 70 kod DeepInsight-a; OF/OP u 3.2.6), što
+umanjuje prostornu informaciju i povezano je sa rezultatima u 6.1.3.
+
+Zajednička napomena uz Slika 3.5–3.7: figure služe vizuelnoj orijentaciji;
+kvantitativni zaključci izvode se iz metrika rasporeda (3.2.6), ablacija
+(odeljak 6.6) i tabela rezultata (poglavlje 6), a ne iz pojedinačnih primera.
 
 ## 3.3 Konvolucione neuronske mreže
 
@@ -1469,7 +1567,7 @@ ViT-Base/16 (nalaz o stopi učenja $10^{-4}$ iz §3.4 već je pripremljen).
 | Slika | Fajl | Poglavlje |
 |---|---|---|
 | Dijagram toka podataka | Slika 5.1/5.2 (ovaj dokument) | 5.1 |
-| Primeri slika po metodi i skupu | `results/figures/t2i_comparison_{dataset}.png` | 3.2/6.4 |
+| Primeri slika po metodi i skupu (Slika 3.5–3.7) | `results/figures/t2i_comparison_{dataset}.png` | 3.2.7 |
 | Gustina slika | `results/figures/t2i_density_comparison.png` | 6.4 |
 | Glavni rezultati (heatmap) | `results/figures/ch4_heatmap_{dataset}.png` | 6.1 |
 | Baselajni | `results/figures/ch4_baseline_comparison.png` | 6.2 |
