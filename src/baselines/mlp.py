@@ -1,5 +1,7 @@
 """MLP baseline for tabular data classification."""
 
+import inspect
+
 import numpy as np
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.neural_network import MLPClassifier
@@ -29,7 +31,18 @@ def train_and_evaluate(X_train, y_train, X_test, y_test, num_classes=2):
         validation_fraction=0.1,
         random_state=42,
     )
-    model.fit(X_train, y_train, sample_weight=sample_weight)
+    # NOTE (Colab sklearn < 1.4): MLPClassifier.fit() gained the
+    # sample_weight argument only in scikit-learn 1.4. Colab's image
+    # (older sklearn) crashes with "unexpected keyword argument
+    # 'sample_weight'", so detect support at runtime instead. When it is
+    # unsupported we fall back to unweighted training and say so, so the
+    # imbalance handling of the MLP baseline is never silently dropped.
+    if 'sample_weight' in inspect.signature(model.fit).parameters:
+        model.fit(X_train, y_train, sample_weight=sample_weight)
+    else:
+        print("[mlp] sklearn does not support sample_weight; training "
+              "without per-sample balancing (see src/baselines/mlp.py)")
+        model.fit(X_train, y_train)
 
     metrics = evaluate_tabular(model, X_test, y_test, num_classes)
     metrics['model'] = 'mlp'
