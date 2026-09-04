@@ -49,7 +49,10 @@ else:
 
 ```python
 # Run ablation experiments (~10 min)
-!python src/ablation.py --all
+# --dataset is REQUIRED even with --all (one dataset per invocation)
+!python src/ablation.py --dataset breast_cancer --all
+!python src/ablation.py --dataset dry_bean --all
+!python src/ablation.py --dataset adult_income --all
 ```
 
 ## Cell 6: Download results
