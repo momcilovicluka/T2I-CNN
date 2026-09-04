@@ -3,7 +3,9 @@
 > **Status nacrta: 4. septembar 2026.** Brojčani rezultati u poglavlju 6 popunjeni
 > su iz finalne serije eksperimenata (36 CNN + 9 baselajna ćelija, CPU na Google
 > Colab-u; `results/all_experiments.csv`) i pokrivaju glavnu seriju i ablacije;
-> eksplicitno **TBD** mesta ostala su još samo u zaključku (poglavlje 8).
+> Poglavlja 6–8 popunjena su rezultatima, diskusijom i zaključkom — bez preostalih
+> **TBD** mesta; ostaje konačno uređivanje teksta i sređivanje referenci iz
+> `Notebook/references.bib`.
 > Tehničke činjenice u tekstu (postupci, hiperparametri,
 > arhitekture, konfiguracije) odgovaraju finalnom kodu i **ne menjati bez provere**
 > sa `Plan/paper-statement-guide.md` (delovi PART 1–13) — tamo je zabeležen razlog
@@ -1213,7 +1215,14 @@ Porede se `resnet` (pretrenirani, 3-kanalni ImageNet normalizovan ulaz) i `resne
 
 - Gustina i preklapanje: `ch4_density_vs_performance.png`, `ch4_overlap_diagnostics.png`.
 
-- Grad-CAM (`ch4_gradcam_{dataset}.png`; modeli `*_model.pt` sačuvani za svaku ćeliju): slike su generisane za sva tri skupa; tekstualna interpretacija aktivacija dopunjava se nakon vizuelnog pregleda u finalnoj redakciji.
+- Grad-CAM (`ch4_gradcam_{dataset}.png`; modeli `*_model.pt` sačuvani za svaku ćeliju, §5.11): za svaki skup
+  generisana je mreža panela — redovi su četiri T2I metode, a kolone originalna slika, prekrivena slika
+  (overlay) i sama toplotna mapa; model je ShallowCNN treniran za datu metodu, jer njegovi standardni
+  konvolucioni slojevi daju najčitljivije mape (§5.11). Mapa pokazuje na kojim pikselima se zasniva
+  odluka: kada CNN koristi prostorni raspored, aktivacije se grupišu oko informativnih koordinata
+  atributa, a nakon mešanja piksela (Slika 6.2) takva struktura nestaje. Konkretni regioni po skupu
+  opisuju se u finalnoj redakciji nakon vizuelnog pregleda mapa (napomene o poštenom tumačenju u
+  `paper-statement-guide.md` PART 15d).
 
 ## 6.5 Vreme treninga
 
@@ -1347,9 +1356,73 @@ poređenja metoda treba čitati **unutar** svake arhitekture.
 
 # 8. Zaključak
 
-[TBD — sažetak najvažnijih nalaza prema pitanjima iz Uvoda: (1) uloga rasporeda,
-(2) transfer učenje, (3) odnos sa baselajnima, (4) faktori koji objašnjavaju
-razlike.]
+U radu je ispitan pristup klasifikaciji tabelarnih podataka preko preslikavanja
+u slike (T2I): četiri postupka preslikavanja (naivni, DeepInsight, TINTO, IGTD),
+tri konvolucione arhitekture (ShallowCNN, pretrenirani ResNet-18 i ResNet-18 od
+nule) i tri tabularna baselajna (Random Forest, XGBoost, MLP), na tri heterogena
+skupa (Breast Cancer, Dry Bean, Adult Income), uz tri ablacije (mešanje piksela,
+raspored atributa i LP-FT). Svi rezultati potiču iz jedne finalne serije
+eksperimenata (36 CNN + 9 baselajna ćelija; jedna verzija koda na jednoj mašini,
+jedna stratifikovana podela, fiksni hiperparametri, seed 42; §4.2), pa se
+zaključci odnose na taj protokol, u granicama ograničenja navedenih u §7.
+
+**Uticaj prostornog rasporeda.** Raspored atributa utiče na performanse, ali
+umereno i zavisno od skupa: raspon između najbolje i najlošije ćelije iznosi
+do ~3,7 pp (Dry Bean, najveći raspon u studiji), a na istoj arhitekturi do
+~3,3 pp; nijedna metoda ne dominira na sva tri skupa — IGTD je dosledno najslabiji na Dry Bean (traka bez prostorne
+grupisanosti, uz kolizije; §6.4), a TINTO i DeepInsight na Adult Income, gde 78,
+odnosno 70 od 104 one-hot atributa dele piksel (§6.4). Ablacija mešanja piksela
+potvrđuje da CNN zaista koriste prostornu strukturu: nasumično premeštanje
+piksela obara makro-F1 na Dry Bean za 85,21 pp — do nivoa većinske klase
+(tačnost 27,07 %, približno 26,1 %) — a F1 na Adult Income za 15,06 pp; na
+Breast Cancer pad je mali (6,58 pp), jer 30 kliničkih atributa nosi signal i
+kroz same intenzitete piksela. Pokazano je i da je DeepInsight raspored
+invarijantan na redosled kolona — originalni, nasumični i obrnuti poredak daju
+identične slike i rezultate — dok sortiranje po korelaciji sa ciljem, jedini
+poredak koji zaista menja raspored, dosledno škodi (−2,27 do −4,48 pp; §6.6).
+
+**Transfer učenje na sintetičkim slikama.** Pretrenirani ResNet-18 ne donosi
+sistematsku prednost na T2I slikama: razlika ΔF1 u odnosu na arhitekturu od nule
+ostaje u granicama ±1 pp na Breast Cancer i Dry Bean, dok na Adult Income sa
+naivnim slikama iznosi −11,40 pp — pretrenirani model postiže F1 57,58 %
+(tačnost 64,70 %, ispod verovatnoće većinske klase od 75,2 %), a ista
+arhitektura trenirana od nule 68,98 % (81,05 %; §6.1.3, §6.3). LP-FT ablacija
+ide u istom smeru: linearno sondiranje zamrznutog ImageNet jezgra daje slabije
+rezultate od direktnog finog podešavanja na sva tri skupa (−7,59 pp na Breast
+Cancer; §6.6). Filteri naučeni na prirodnim slikama ne prenose se na
+reprezentacije bez prostorne statistike prirodnog domena, a negativan efekat je
+najveći upravo tamo gde ulaz najviše odstupa od ImageNet raspodele (redosledni
+naivni raspored).
+
+**Odnos sa baselajnima.** Na Breast Cancer i Dry Bean CNN+T2I dostižu nivo
+klasičnih metoda: najbolja ćelija (97,22 % F1 na Breast Cancer, 93,99 % na Dry
+Bean) paritetna je sa najboljim baselajnom (RF 96,55 %, odnosno XGBoost
+93,91 %). Na Adult Income XGBoost nadmašuje sve CNN+T2I kombinacije (71,43 %
+prema najboljih 68,98 %), a RF ima najvišu tačnost (85,52 %) — preslikavanje
+104 visokodimenzionalnih one-hot obeležja u 32×32 sliku gubitno je i u tom
+režimu T2I pristup ne dodaje vrednost u odnosu na tabularne modele. Baselajni su
+nepodešeni (uz balansirane težine klasa), pa se poređenje odnosi na zadati
+protokol, ne na apsolutni plafon metoda (§6.2, §7).
+
+**Faktori koji objašnjavaju razlike.** Kapacitet mreže bez pretreniranosti ne
+menja rangiranje: ShallowCNN i ResNet-18 od nule postižu bliske rezultate na
+sva tri skupa (na Adult Income 68,94 % prema 68,98 % F1), a najveći izmereni
+efekat u studiji — 11,40 pp — potiče iz interakcije pretreniranosti i ulazne
+reprezentacije, ne iz kapaciteta. Efekat izbora metode (~2–4 pp) manji je od
+efekta arhitekture i pretreniranosti (do ~11 pp). Dijagnostika slika (gustina,
+kolizije atributa, sličnost vs. rastojanje; §6.4) objašnjava zaostajanje
+pojedinih metoda na Adult Income, dok zajednički protokol (fiksna stopa učenja
+po arhitekturi, rano zaustavljanje po validacionom gubitku, balansirane težine
+klasâ u baselajnima) čini poređenje uporedivim.
+
+Sveukupno, T2I pristup jeste održiv način primene konvolucionih mreža na
+tabelarne podatke: na skupovima sa umerenim brojem atributa dostiže paritet sa
+klasičnim algoritmima, uz dodatne mogućnosti interpretabilnosti (Grad-CAM,
+§6.4). Prostorni raspored jeste relevantan — što ablacije potvrđuju — ali je
+njegov uticaj manji od izbora arhitekture i režima treninga, a prednosti
+transfer učenja sa prirodnih slika ne prenose se na sintetičke slike
+tabelarnog porekla. Uključivanje transformerskih arhitektura (ViT) u glavnu
+seriju ostaje otvoreno pitanje koje zahteva GPU resurse.
 
 **Budući rad:** unakrsna validacija sa intervalima poverenja; podešavanje
 hiperparametara (Optuna) za sve modele pod istim protokolom; adaptivno
@@ -1437,11 +1510,11 @@ odgovarati kodu — svaka ima zabeležen razlog u `Plan/paper-statement-guide.md
       po metodi (PART 13b, 1.3).
 - [x] Navesti jednu podelu 70/10/20 bez CV (PART 1.1) i da su svi modeli trenirani
       na istim trening redovima (PART 11.3).
-- [ ] U metodologiji: ImageNet normalizacija + 3 kanala za pretrenirane,
+- [x] U metodologiji: ImageNet normalizacija + 3 kanala za pretrenirane,
       1 kanal za od-nule modele (PART 4.2/9a); opseg [0,1] po metodi (PART 10a).
-- [ ] S-IGTD pomenuti samo kao srodan pristup (PART 13i, 8b).
-- [ ] Ne koristiti tvrdnje iz PART 7 (LP-FT/CV/adaptivno) — nisu deo protokola.
-- [ ] ViT pomenuti samo kao van glavne serije + nalaz o stopi 1e-4 kao
+- [x] S-IGTD pomenuti samo kao srodan pristup (PART 13i, 8b; §3.2.5).
+- [x] Ne koristiti tvrdnje iz PART 7 (LP-FT/CV/adaptivno) — nisu deo protokola; LP-FT se iznosi samo kao ablacija (§6.6).
+- [x] ViT pomenuti samo kao van glavne serije + nalaz o stopi 1e-4 kao
       osnovu za budući rad (PART 12, 14).
 - [x] Listinge 5.1–5.11 proveriti pre slanja — skraćeni su izvodi iz aktuelnog
       koda (fajl je naveden u svakom listingu; provereno 2026-09-03: svaka
