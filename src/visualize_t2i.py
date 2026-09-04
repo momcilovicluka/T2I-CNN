@@ -100,7 +100,9 @@ def plot_pixel_density_comparison():
     method_labels = ['Naive', 'TINTO', 'DeepInsight', 'IGTD']
     image_size = 32
 
-    fig, axes = plt.subplots(3, 3, figsize=(12, 12))
+    # Grid rows = T2I methods (4), columns = datasets (3). A (3,3) grid would
+    # overrun on the 4th method (IndexError) — rows must match len(methods).
+    fig, axes = plt.subplots(len(methods), len(datasets), figsize=(12, 4 * len(methods)))
 
     for col_idx, dataset_name in enumerate(datasets):
         data = preprocess_dataset(dataset_name)
