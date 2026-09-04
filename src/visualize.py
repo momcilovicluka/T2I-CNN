@@ -894,7 +894,7 @@ def plot_confusion_matrices(results, output_dir='results/figures'):
 
 def plot_ablation_results(output_dir='results/figures'):
 
-    """Pixel shuffling and LP-FT ablation results."""
+    """Pixel shuffling, feature ordering and LP-FT ablation results."""
 
     output_path = Path(output_dir)
 
@@ -999,6 +999,46 @@ def plot_ablation_results(output_dir='results/figures'):
         print(f"  Saved: {path.name}")
 
 
+
+    # Feature Ordering
+    ordering_results = load_ablation_results('results', 'ablation_feature_ordering_')
+    if ordering_results:
+        # original vs random vs correlation vs reversed ordering of the input columns.
+        # F1 semantics: macro for the 7-class dry_bean, positive-class otherwise (PART 13e).
+        fig, ax = plt.subplots(figsize=(9, 5.4))
+        orderings = ['original', 'random', 'correlation', 'reversed']
+        colors = {'original': '#4c72b0', 'random': '#55a868',
+                  'correlation': '#c44e52', 'reversed': '#8172b3'}
+        by_ds = {r['dataset']: r for r in ordering_results}
+        items = [(ds, by_ds[ds]) for ds in DATASETS if ds in by_ds]
+        n = len(items)
+        x = np.arange(n)
+        width = 0.2
+        for i, o in enumerate(orderings):
+            vals = [items[j][1]['results'][o]['f1'] * 100 for j in range(n)]
+            bars = ax.bar(x + (i - 1.5) * width, vals, width, label=o.capitalize(),
+                          color=colors[o], edgecolor='white')
+            for bar, val in zip(bars, vals):
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                        f'{val:.1f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
+        ax.set_xticks(x)
+        ax.set_xticklabels([DATASET_LABELS[ds].splitlines()[0] for ds, _ in items], fontsize=10)
+        ax.set_ylabel('F1 (%)')
+        ax.set_title('Ablation: Feature Ordering (DeepInsight + ShallowCNN)',
+                     fontsize=12, fontweight='bold')
+        ax.legend(fontsize=9, ncol=len(orderings), frameon=False)
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        plt.tight_layout(rect=(0, 0.10, 1, 1))
+        fig.text(0.5, 0.035,
+                 'original = random = reversed for every dataset: DeepInsight derives pixel positions from feature '
+                 'relationships, so the layout is invariant to input column order; only the correlation-sorted key '
+                 'genuinely changes the layout.',
+                 ha='center', va='center', fontsize=8, style='italic', color='#555555')
+        path = output_path / 'ch4_ablation_feature_ordering.png'
+        fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+        plt.close(fig)
+        print(f"  Saved: {path.name}")
 
     # LP-FT vs Direct FT
 

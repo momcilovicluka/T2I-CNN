@@ -543,3 +543,81 @@ baselines ~10-20 min. Total ~3-6 h, safely inside a Colab session.
 - Pretrained-vs-scratch deltas = combined effect (decision b4e9bdd).
 - Verify the dry-bean per-class F1 figure on the FIRST finished dry-bean
   result (numeric-row parser fix verified, but re-check on real data).
+
+## 12. Final-results validation audit (2026-09-04, post-run)
+
+Scope: every result from the final CPU run (36 CNN cells + 9 baselines + 9
+ablation cells), the aggregated CSV, model checkpoints and all figures were
+validated against the code and cross-checked for internal consistency. Source
+of truth is `results/` (extracted from the exported zip) with
+`all_experiments.csv`. Outcome: the full set validates CLEAN — nothing to
+re-run, nothing to delete, no code change needed.
+
+### 12.1 Inventory and integrity (validated clean)
+- Inventory: 54 JSONs = 36 CNN (3 datasets x 4 T2I x 3 archs, full grid, no
+  missing/extra cells) + 9 baselines (3 x RF/XGB/MLP; MLP present after the
+  6e3f894 sklearn fix) + 9 ablations (3 modes x 3 datasets); 36 `*_model.pt`
+  checkpoints; `all_experiments.csv` with all 45 rows.
+- CSV <-> JSON: 0 real mismatches (45/45 agree to the CSV's 4-decimal
+  rounding).
+- One shared split per dataset: every CNN and baseline cell carries identical
+  train/test sizes (398/114, 9527/2723, 31654/9045); per-class test supports
+  are identical across methods (dry-bean BOMBAY = 104/2723 everywhere).
+- No degeneracy: all metrics in [0,1], no NaN; best validation loss < chance
+  (ln C) on every cell; confusion matrices are square and sum to the test
+  size; per-class macro-F1 recomputed from each CM equals the stored
+  `f1_macro` on all 36 cells (multiclass macro; binary uses sklearn
+  `average='binary'`, i.e. F1 of class 1 = benign for breast, >50K for adult
+  — matching the draft's labelling).
+- Uniform timing: all 45 cells carry `total_time_sec` (additive with the two
+  clocked phases within per-cell overhead); the timestamp chain is coherent
+  (CNN suite -> baselines -> MLP after fix -> CSV regen -> ablations ->
+  figure chain 15:11-15:12).
+- Checkpoints: 36 `.pt` spot-loaded successfully; channel counts match the
+  6692c79 change (pretrained conv1=(64,3,7,7), scratch (64,1,7,7), shallow
+  (32,1,3,3)).
+- Figures: all targets of `visualize.py` (incl. Grad-CAM and the three
+  ablation charts), `visualize_arrangement.py` and `visualize_pipeline.py`
+  exist as valid PNGs (26 total in `results/figures`).
+
+### 12.2 Results within the predicted bands (validated)
+- breast_cancer: cells 95.0-97.2 F1 vs baselines RF 96.55 / XGB 95.83 / MLP
+  94.52 — CNN/baseline parity, textbook band.
+- dry_bean: 90.3-94.0 macro-F1, at the literature ceiling; IGTD consistently
+  weakest (90.3-92.3), matching the strip-layout collision diagnostics.
+- adult_income: XGBoost 71.43 beats EVERY T2I-CNN (57.6-69.0) — the expected
+  lossy-transformation finding; naive+pretrained-resnet at 57.58 (-11.4 pp vs
+  scratch, accuracy 64.70 below the 75.2% majority rate) is the headline
+  negative transfer and is deterministic (seed 42). No majority collapse
+  anywhere (degenerate macro-F1 would be ~0.39/0.06/0.43; all measured far
+  above).
+- Ablations consistent with the documented findings: pixel shuffle drops dry
+  bean -85.2 pp (shuffled accuracy 27.07% ~= 26.1% majority — CNN relies on
+  spatial layout), breast -6.6, adult -15.1; feature ordering gives
+  original = random = reversed on every dataset (DeepInsight layout is
+  permutation-invariant — identical images verified) and correlation-sorted
+  is worst (91.97/91.07/64.26); LP-FT loses to direct fine-tuning on all
+  three datasets (-7.59/-0.93/-0.59 pp) — the documented negative result.
+
+### 12.3 Write-up nuances (not defects — how to phrase them)
+- Ablation "original" retrain jitter: `ablation.py` retrains its own baseline
+  cells, which reproduce the main table almost exactly — bit-identical on
+  breast, within ~0.2 pp on dry bean (93.53 vs 93.37) and adult (66.34 vs
+  66.53). Same seed and training function; benign CPU nondeterminism at
+  larger scale. Consequence: quote every paper number from the single
+  main-run set (`all_experiments.csv`), never mixing in ablation "original"
+  cells; ablation figures are fine as-is because they contrast against their
+  own re-trained baseline.
+- Feature-ordering figure: at zip-validation time `visualize.py` plotted only
+  the pixel-shuffling and LP-FT ablations, so the ordering results existed
+  only as numbers in the 9 ordering JSONs (reportable as a table). Resolved:
+  `ch4_ablation_feature_ordering.png` (grouped bars original/random/
+  correlation/reversed per dataset, runs under `--ablation-only`) was added
+  to `src/visualize.py` and regenerated. That change and the draft chapter-6
+  number pass are uncommitted in the worktree.
+
+### 12.4 Verdict
+The complete result set validates clean and sits inside every predicted band.
+Paper numbers should be quoted exclusively from `all_experiments.csv` + the
+45 cell JSONs; ablation and figure chains add no new information beyond what
+sections 12.2/12.3 record. Nothing requires a re-run or deletion.
