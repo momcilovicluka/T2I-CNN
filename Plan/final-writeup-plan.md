@@ -59,17 +59,17 @@ missing and are now generated.
 - [x] **Sažetak / apstrakt + ključne reči** — added (2026-09-04): Serbian
       summary with keywords and an English abstract, placed between the
       title page and chapter 1.
-- [ ] **Example T2I figures have no body prose.** t2i_comparison_{dataset}.png
+- [x] **Example T2I figures have no body prose (added 2026-09-04: section 3.2.7, Slika 3.5-3.7 captions and per-figure prose).** t2i_comparison_{dataset}.png
       are listed only in Prilog A; the write-up should give them figure
       numbers and captions and point to them where methods are introduced
       (section 3.2, likely as Slika 3.5-3.7 or placed in 6.4 — decide
       numbering once) plus one sentence per figure (how naive's row-major
       layout vs DeepInsight/TINTO projections vs IGTD strips read).
-- [ ] **t2i_density_comparison.png role vs ch4_density_vs_performance.png.**
+- [x] **t2i_density_comparison.png role vs ch4_density_vs_performance.png (resolved 2026-09-04, section 6.4: illustrative per-sample density grid vs quantitative density-per-pixel scatter; OF/OP overlap bars).**
       Both density-related; decide which is illustrative (per-sample grid,
       t2i_density_comparison) vs quantitative (density-vs-performance
       scatter) and say so where each is cited (6.4 / Prilog A).
-- [ ] **Grad-CAM region interpretation.** Figure layout is described in 6.4;
+- [x] **Grad-CAM region interpretation (added 2026-09-04: measured readings from exact saliency arrays, per method per dataset, in section 6.4).** Figure layout is described in 6.4;
       the per-dataset verbal reading of activation regions is still deferred
       to final redaction after visual inspection of the PNGs (honest framing
       per guide PART 15d).

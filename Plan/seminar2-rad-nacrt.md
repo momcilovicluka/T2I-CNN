@@ -1311,16 +1311,35 @@ Porede se `resnet` (pretrenirani, 3-kanalni ImageNet normalizovan ulaz) i `resne
 
 - Veza sa rezultatima (§6.1.3): na Adult Income TINTO i DeepInsight (najviše kolizija) postižu niži F1 od naive i IGTD na ShallowCNN i ResNet-18 od nule (66,32–67,03 % prema 68,45–68,98 %), što odgovara gubitku prostorne informacije usled kolizija — ali taj efekat (2–3 pp) ostaje manji od efekta arhitekture/pretreniranosti (do ~11 pp, §6.3). Na Breast Cancer i Dry Bean negativna korelacija (slični atributi blizu) ne povlači pad performansi: sve metode dostižu nivo baselajna (§6.2).
 
-- Gustina i preklapanje: `ch4_density_vs_performance.png`, `ch4_overlap_diagnostics.png`.
+- Gustina i preklapanje, dva nivoa: `t2i_density_comparison.png` je ilustrativna slika -
+  mreža primera po metodi i skupu (po jedan primer najčešće klase; gustina >0,01 ispisana
+  u naslovu panela); `ch4_density_vs_performance.png` je kvantitativna - udeo atributa po
+  pikselu (gustina) naspram F1 po ćeliji; `ch4_overlap_diagnostics.png` je kvantitativna -
+  OF% (udeo atributa koji dele piksel s nekim drugim) i OP% (udeo piksela koje deli više
+  atributa) po metodi i skupu (brojevi 78/104 i 70/104 iz §3.2.6 potiču upravo odavde).
 
 - Grad-CAM (`ch4_gradcam_{dataset}.png`; modeli `*_model.pt` sačuvani za svaku ćeliju, §5.11): za svaki skup
   generisana je mreža panela — redovi su četiri T2I metode, a kolone originalna slika, prekrivena slika
   (overlay) i sama toplotna mapa; model je ShallowCNN treniran za datu metodu, jer njegovi standardni
   konvolucioni slojevi daju najčitljivije mape (§5.11). Mapa pokazuje na kojim pikselima se zasniva
   odluka: kada CNN koristi prostorni raspored, aktivacije se grupišu oko informativnih koordinata
-  atributa, a nakon mešanja piksela (Slika 6.2) takva struktura nestaje. Konkretni regioni po skupu
-  opisuju se u finalnoj redakciji nakon vizuelnog pregleda mapa (napomene o poštenom tumačenju u
-  `paper-statement-guide.md` PART 15d).
+  atributa, a nakon mešanja piksela (Slika 6.2) takva struktura nestaje.   Kvantitativno čitanje aktivacija (ista procedura i isti uzorci kao na slici;
+  prosek po 4/14/4 prikazana primera, iz samih nizova salijentnosti): računate su
+  (a) koncentracija pažnje na „osvetljenim" pikselima (vrednost >0,02) u odnosu na
+  celu sliku i (b) udeo najtoplijih 25 % salijentnosti na tim pikselima. TINTO
+  najdoslednije koncentriše pažnju na informativne površine - Breast 1,08x i 57 %,
+  Dry Bean 1,21x i 44 %, Adult 2,07x i 48 % (udeo osvetljenih piksela 50 % / 34 % /
+  25 %); naivni raspored tek na Adult (1,51x; 20 % od 14 %). DeepInsight na ovoj
+  rezoluciji ne pokazuje merljivu prostornu preferenciju: najtoplija masa pada na
+  atribute proporcionalno njihovom malom udelu (2,6 % od 2,8 %; 1,9 % od 1,5 %;
+  1,1 % od 1,2 %) jer 4x4 mape ne razlučuju pojedinačne, veoma retke tačke
+  (ograničenje rezolucije, PART 9f/10b, ne dokaz o neupotrebi rasporeda; raspored
+  se koristi, §6.6).
+  IGTD pokriva celu traku (udeo približno 100 %) uz dosledno
+  negativnu korelaciju salijentnosti i intenziteta (-0,16 do -0,23): fokus mreže
+  ne prati sadržaj trake, što odgovara njegovim najslabijim rezultatima (§6.1).
+  Ove vrednosti kvantifikuju upravo ono što se vidi na panelima (napomene o
+  poštenom tumačenju u `paper-statement-guide.md` PART 15d).
 
 ## 6.5 Vreme treninga
 
