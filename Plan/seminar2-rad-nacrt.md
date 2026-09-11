@@ -1237,7 +1237,7 @@ Baselajni (F1/tačnost): RF 93,48 (92,32), XGBoost 93,91 (92,69), MLP 93,46 (92,
 
 - Sve metode dostižu 90,33–93,99 % makro-F1 (tačnost 88,73–92,80 %), što odgovara literaturnom plafonu za ovaj skup (RF/XGBoost ~92–93 %). Najbolja ćelija jeste naivna + ShallowCNN (93,99 %).
 
-- IGTD je dosledno najslabiji (90,33–92,28 %), što se poklapa sa dijagnostikom rasporeda (traka po redosledu i kolizije, §3.2.6/6.4); razlika prema najboljoj metodi ide do ~3,7 pp.
+- IGTD je dosledno najslabiji (90,33–92,28 %), što se poklapa sa dijagnostikom rasporeda (traka po redosledu, bez kolizija: OF = OP = 0 %, §3.2.6/6.4); razlika prema najboljoj metodi ide do ~3,7 pp.
 
 - Po-klasno, najniži F1 javlja se na klasi SIRA (0,78–0,88 zavisno od ćelije): greške se koncentrišu unutar trija vizuelno bliskih klasa SEKER/DERMASON/SIRA (matrice konfuzije `ch4_confusion_matrices.png`, po-klasni F1 `ch4_per_class_f1_dry_bean.png`); najmanja klasa BOMBAY (3,8 % testa) ne kolabira.
 
@@ -1363,38 +1363,48 @@ ablacija se ne mešaju sa brojevima glavne tabele (6.1) u zaključcima.
 
 **Mešanje piksela (Slika 6.2, `ch4_ablation_pixel_shuffling.png`).**
 Nasumično premeštanje piksela unutar svake slike (seed 42) zadržava marginalne
-intenzitete, a uništava prostorni raspored:
+intenzitete, a uništava prostorni raspored. Ablacija ima dva kraka (ispravka
+audit nalaza C3).
+
+*Krak A — model treniran na originalnim slikama, testiran na permutovanim
+(`f1_drop`, mera osetljivosti na promenu ulaza):*
 
 - Breast Cancer: F1 96,45 → 89,87 % (pad 6,58 pp; pad tačnosti 9,65 pp).
 - Dry Bean: F1 93,37 → 8,16 % (pad 85,21 pp; pad tačnosti 65,08 pp).
 - Adult Income: F1 66,53 → 51,47 % (pad 15,06 pp; pad tačnosti 14,56 pp).
 
-Dry Bean kolabira na nivo većinske klase (tačnost 27,07 %, približno 26,1 %),
-što potvrđuje da CNN na ovom skupu zaista koristi prostornu strukturu; Breast
-Cancer gubi samo 6,58 pp (30 kliničkih atributa nosi signal i kroz same
-intenzitete piksela), a Adult 15,06 pp. Zaključak se zato iznosi **po skupu**,
-ne globalno.
+*Krak B — model ponovo treniran na permutovanim slikama i testiran na istoj
+permutaciji (`shuffled_train_f1`, `retrain_drop`; ovo je pravi test da li
+raspored nosi informaciju):*
+
+- Breast Cancer: __ % (retrain_drop __ pp) — [UNETI IZ JSON-a posle pokretanja]
+- Dry Bean: __ % (retrain_drop __ pp) — [UNETI IZ JSON-a posle pokretanja]
+- Adult Income: __ % (retrain_drop __ pp) — [UNETI IZ JSON-a posle pokretanja]
+
+Krak A pokazuje samo da model naučen na originalnom rasporedu ne preživljava
+permutaciju ulaza (distribucioni pomak), a ne da je raspored bio neophodan. Ako
+krak B povrati F1 blizu originalne, CNN se oslanja na marginalne statistike
+piksela, a ne na konkretan raspored; ako padne, raspored nosi informaciju.
+Zaključak se iznosi **po skupu**, ne globalno, i tek posle očitavanja oba kraka.
 
 **Slika 6.3. Uticaj rasporeda atributa na F1** (`ch4_ablation_feature_ordering.png`): F1 po
 skupu za četiri poretka kolona na ulazu — originalni, nasumični, po korelaciji atributa sa
-ciljnom promenljivom i obrnuti; poklapanje tri poretka na svakom skupu posledica je
-invarijantnosti rasporeda na redosled kolona kod DeepInsight-a (obrazloženje u nastavku).
+ciljnom promenljivom i obrnuti. Jedna ista permutacija kolona izračunata je na
+trening skupu i primenjena na sva tri skupa (ispravka audit nalaza C1).
 
-- Breast Cancer: original 96,45 %, nasumični 96,45 %, korelacioni 91,97 %,
-  obrnuti 96,45 % (najbolji: original; najslabiji: korelacioni).
-- Dry Bean: original 93,37 %, nasumični 93,37 %, korelacioni 91,07 %,
-  obrnuti 93,37 % (najbolji: original; najslabiji: korelacioni).
-- Adult Income: original 66,53 %, nasumični 66,53 %, korelacioni 64,26 %,
-  obrnuti 66,53 % (najbolji: original; najslabiji: korelacioni).
+- Breast Cancer: sva četiri poretka 96,45 %.
+- Dry Bean: sva četiri poretka 93,37 %.
+- Adult Income: sva četiri poretka 66,53 %.
 
-Originalni, nasumični i obrnuti poredak daju **identične** rezultate na svakom
-skupu, jer DeepInsight izvodi položaje atributa iz njihovih međusobnih odnosa
-(projekcija) — redosled kolona na ulazu ne menja generisanu sliku (provereno:
-identične slike). Jedini poredak koji zaista menja raspored jeste sortiranje po
-korelaciji sa ciljem, i on daje dosledno najslabije rezultate (pad 4,48 pp na
-Breast, 2,30 pp na Dry Bean i 2,27 pp na Adult u odnosu na original) —
-grupisanje srodnih atributa koje nameće ta sorta ne pomaže modelu na ovim
-skupovima.
+Sva četiri poretka daju **identične** rezultate na svakom skupu: DeepInsight
+izvodi položaje atributa iz njihovih međusobnih odnosa (projekcija), pa redosled
+kolona na ulazu ne menja generisanu sliku. Ablacija rasporeda je zato za
+DeepInsight **nerezultativna** (potvrđuje invarijantnost, ne razliku među
+porecima). Prethodna tvrdnja da sortiranje po korelaciji „zaista menja raspored“
+bila je artefakt: permutacija se ranije računala zasebno po skupu, pa su
+vrednosti test skupa završavale na koordinatama naučenim iz trening skupa
+(2,34 % pogrešnih piksela na Breast). Za prikaz stvarnog efekta redosleda
+pokrenuti istu ablaciju sa `--t2i naive` (naivni raspored nije invarijantan).
 
 **LP-FT (Slika 6.4, `ch4_ablation_lpft.png`).** Poređenje direktnog finog
 podešavanja pretreniranog ResNet-18 sa LP-FT (linearno sondiranje zamrznutog
@@ -1406,6 +1416,12 @@ jezgra, pa fino podešavanje svih slojeva):
   prednost LP-FT −0,93 pp.
 - Adult Income: direktno FT 66,44 % (33 epohe) vs LP-FT 65,86 % (38 epoha) →
   prednost LP-FT −0,59 pp.
+
+Napomena (audit C4): direktno FT je zasebno pokretanje, ne reprodukcija ćelije
+glavne tabele — ista konfiguracija daje 98,63 % ovde, a 97,22 % u glavnoj
+tabeli (§6.1.3) na Breast; poređenje LP-FT vs direktno FT je zato interno
+upareno (obe grane iz istog pokretanja), a broj direktnog FT se ne citira kao
+drugi izvor za ćeliju glavne tabele.
 
 LP-FT prednost iz literature **ne prenosi se** na T2I slike: direktno fino
 podešavanje daje bolji rezultat na Breast Cancer (−7,59 pp) i uporediv na Dry
@@ -1420,18 +1436,20 @@ negativan nalaz, konzistentan sa §6.3.
 
 # 7. Diskusija
 
-**Da li raspored atributa utiče na performanse?** Ablacije potvrđuju da CNN
-zaista koristi prostornu strukturu: mešanje piksela obara makro-F1 na Dry Bean
-za 85,21 pp (do nivoa većinske klase), a F1 na Adult za 15,06 pp; na Breast
-Cancer pad je mali (6,58 pp), jer 30 kliničkih atributa nosi signal i kroz
-same intenzitete piksela. Redosled kolona na ulazu kod DeepInsight ne menja
-generisanu sliku (položaji atributa izvode se iz odnosa među atributima), pa
-nasumični i obrnuti poredak daju identične rezultate kao originalni; jedino
-sortiranje po korelaciji sa ciljem zaista menja raspored i dosledno škodi
-(2,3–4,5 pp, §6.6). U glavnoj seriji napredne metode ne donose sistematsku
-prednost nad naivnom na ShallowCNN: rang zavisi od skupa (§6.1), a razlike
-među metodama (do ~3,7 pp na Dry Bean) manje su od efekta arhitekture i
-pretreniranosti (do ~11 pp na Adult).
+**Da li raspored atributa utiče na performanse?** Ablacija mešanja piksela
+pokazuje da model treniran na originalnom rasporedu ne preživljava permutaciju
+ulaza (pad makro-F1 na Dry Bean za 85,21 pp do nivoa većinske klase, na Adult
+15,06 pp, na Breast 6,58 pp) — ali je to mera osetljivosti, ne dokaz da je
+raspored bio neophodan. Da li je raspored zaista nosio informaciju pokazuje
+krak B (trening na permutovanim slikama, `retrain_drop`; §6.6) — [UNETI POSLE
+POKRETANJA]. Redosled kolona na ulazu kod DeepInsight ne menja generisanu
+sliku (položaji atributa izvode se iz odnosa među atributima), pa sva četiri
+poretka daju identične rezultate (96,45 / 93,37 / 66,53 %); ablacija rasporeda
+je za DeepInsight nerezultativna i stvarni efekat redosleda treba pokazati na
+naivnoj metodi (`--t2i naive`, §6.6). U glavnoj seriji napredne metode ne
+donose sistematsku prednost nad naivnom na ShallowCNN: rang zavisi od skupa
+(§6.1), a razlike među metodama (do ~3,7 pp na Dry Bean) manje su od efekta
+arhitekture i pretreniranosti (do ~11 pp na Adult).
 
 **Transfer učenje na sintetičkim slikama.** Pretrenirani ResNet-18 ne donosi
 sistematsku prednost na T2I slikama: ΔF1 (pretrenirani minus od nule) ostaje u
@@ -1487,16 +1505,18 @@ zaključci odnose na taj protokol, u granicama ograničenja navedenih u §7.
 umereno i zavisno od skupa: raspon između najbolje i najlošije ćelije iznosi
 do ~3,7 pp (Dry Bean, najveći raspon u studiji), a na istoj arhitekturi do
 ~3,3 pp; nijedna metoda ne dominira na sva tri skupa — IGTD je dosledno najslabiji na Dry Bean (traka bez prostorne
-grupisanosti, uz kolizije; §6.4), a TINTO i DeepInsight na Adult Income, gde 78,
-odnosno 70 od 104 one-hot atributa dele piksel (§6.4). Ablacija mešanja piksela
-potvrđuje da CNN zaista koriste prostornu strukturu: nasumično premeštanje
-piksela obara makro-F1 na Dry Bean za 85,21 pp — do nivoa većinske klase
-(tačnost 27,07 %, približno 26,1 %) — a F1 na Adult Income za 15,06 pp; na
-Breast Cancer pad je mali (6,58 pp), jer 30 kliničkih atributa nosi signal i
-kroz same intenzitete piksela. Pokazano je i da je DeepInsight raspored
-invarijantan na redosled kolona — originalni, nasumični i obrnuti poredak daju
-identične slike i rezultate — dok sortiranje po korelaciji sa ciljem, jedini
-poredak koji zaista menja raspored, dosledno škodi (−2,27 do −4,48 pp; §6.6).
+grupisanosti: svi atributi u jednom redu, jedan piksel po atributu, bez kolizija — OF = OP = 0 %; §6.4), a TINTO i DeepInsight na Adult Income, gde 78,
+odnosno 70 od 104 one-hot atributa dele piksel (§6.4). Ablacija mešanja piksela pokazuje da model treniran na originalnom rasporedu
+ne preživljava permutaciju ulaza — pad makro-F1 na Dry Bean za 85,21 pp, do
+nivoa većinske klase (tačnost 27,07 %, približno 26,1 %), na Adult Income za
+15,06 pp, na Breast Cancer za 6,58 pp. Da li raspored nosi informaciju (a ne
+samo da je ulaz pomeren) pokazuje krak B iste ablacije, koji se trenira na
+permutovanim slikama (`retrain_drop`; §6.6) — [UNETI POSLE POKRETANJA].
+Pokazano je i da je DeepInsight raspored invarijantan na redosled kolona: sva
+četiri poretka (originalni, nasumični, po korelaciji i obrnuti) daju identične
+slike i identične rezultate (96,45 / 93,37 / 66,53 %), pa je ablacija rasporeda
+za DeepInsight nerezultativna; ranija tvrdnja da sortiranje po korelaciji
+„menja raspored i škodi“ bila je artefakt permutacije računate po skupu (§6.6).
 
 **Transfer učenje na sintetičkim slikama.** Pretrenirani ResNet-18 ne donosi
 sistematsku prednost na T2I slikama: razlika ΔF1 u odnosu na arhitekturu od nule

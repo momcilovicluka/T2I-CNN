@@ -46,6 +46,46 @@ need to be re-run unless C11 or C12 is changed.
 
 ---
 
+## Phase 1 implementation status (2026-09-11)
+
+Phase 1 (audit items C1–C5) is implemented in the working tree. **No code was
+executed** — the Colab run below is still required. Line numbers quoted in the
+findings below refer to the pre-fix revision; the functions are named, so they
+remain findable after the edits.
+
+| Item | Change made | State | Still required |
+|------|-------------|-------|----------------|
+| C1 | `src/ablation.py`: new `correlation_order()`; `reorder_features(..., perm=)`; `run_feature_ordering_ablation` computes ONE train permutation and applies it to all splits; ordering JSON gains `ordering_note` + `correlation_perm`. `src/visualize.py` figure footnote rewritten. Draft §6.6/§7/§8 rewritten. | done | Re-run 3 ordering ablations; confirm four identical bars; regenerate `ch4_ablation_feature_ordering.png` |
+| C3 | `src/ablation.py`: pixel-shuffle gains arm B (train shuffled → test shuffled) with `shuffled_train_f1` / `retrain_drop`; `conclusion` now keys on arm B. Draft §6.6/§7/§8 restructured into arm A / arm B. | done | Re-run 3 pixel-shuffle ablations; fill the `[UNETI ...]` numbers |
+| C4 | `src/ablation.py`: LP-FT JSON gains `seed`, `direct_ft_config`, `lpft_config`, `arm_note`. `professor-validation.md` §12.3b correction added; draft LP-FT caveat added. | done | Re-run 3 LP-FT ablations and reconcile 98.63 vs 97.22 |
+| C2 | `src/visualize.py`: OF/OP annotations moved inside the per-method loop; ylim computed across all methods. | done | Regenerate `ch4_overlap_diagnostics.png` |
+| C5 | `src/t2i/overlap_metrics.py`: IGTD OF/OP measured from its fitted coordinates; naive annotated (`note`, `n_active_pixels` = D). | done | Regenerate the overlap figure |
+
+Main grid: **not touched** — the 36 CNN + 9 baseline cells and their JSONs are
+unchanged, so `run_all.py` needs no re-run for Phase 1.
+
+Colab sequence after pulling these edits (bash cells; ~45–70 min total):
+
+```bash
+for ds in breast_cancer dry_bean adult_income; do
+  python src/ablation.py --dataset $ds --t2i deepinsight --cnn shallow --all
+done
+python src/visualize.py --ablation-only          # 3 ablation figures
+python -c "import src.visualize as v; v.plot_overlap_diagnostics()"
+```
+
+`--all` runs pixel-shuffle, feature-ordering and LP-FT for each dataset;
+`--ablation-only` regenerates the three ablation figures but NOT the overlap
+figure, hence the one-liner (or the full `python src/visualize.py`, which also
+re-runs Grad-CAM).
+
+Expected outcome of the C1 fix: all four orderings collapse to identical F1
+(96.45 / 93.37 / 66.53 %), i.e. the ordering ablation becomes an invariance
+(negative) result for DeepInsight; the optional `--t2i naive` run is what would
+show a real ordering effect.
+
+---
+
 ## C1 — CRITICAL: the feature-ordering ablation is invalid (per-split permutation)
 
 **Where.** `src/ablation.py:172` (`reorder_features`, `order == 'correlation'`),

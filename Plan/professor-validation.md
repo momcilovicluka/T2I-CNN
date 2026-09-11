@@ -616,6 +616,37 @@ re-run, nothing to delete, no code change needed.
   to `src/visualize.py` and regenerated. That change and the draft chapter-6
   number pass are uncommitted in the worktree.
 
+### 12.3b CORRECTION (2026-09-11) — supersedes 12.2/12.3 where they conflict
+
+Full detail: `Plan/critical-audit-findings.md` (items C1, C2, C3, C4, C5).
+Every point below was reproduced against the code, not merely re-read.
+
+- 12.2's "correlation-sorted is worst (91.97/91.07/64.26)" is WRONG.
+  `ablation.reorder_features('correlation', X_split, y_split)` recomputed the
+  column permutation from EACH split's own labels, so train/val/test received
+  different orders and the T2I model wrote test values at train-derived pixel
+  positions. Verified: with one train-derived permutation all four orderings
+  give bit-identical images, while the per-split version differs on 2.34% of
+  breast test pixels. The drop is a split-alignment artefact, not a layout
+  effect. Fixed in `src/ablation.py`.
+- 12.2's "CNN relies on spatial layout" reads the pixel-shuffle arm as if it
+  were the structure test. That arm trains on ORIGINAL images and tests on
+  shuffled ones — a distribution-shift probe. An arm B ("train shuffled ->
+  test shuffled", JSON keys `shuffled_train_f1` / `retrain_drop`) was added to
+  answer the actual question of whether the layout carried information.
+- 12.3's "bit-identical on breast" applies only to the feature-ordering
+  "original" cell (96.45 = 96.45). The LP-FT direct-FT arm is NOT a
+  reproduction of the main-table resnet cell: breast gives 98.63 there vs
+  97.22 in the main table. Quote the LP-FT comparison as internally paired
+  (both arms from the same run); the direct-FT number is not a second
+  estimate of the main-table cell.
+- 12.2's "deterministic (seed 42)" for the adult naive/pretrained cell is
+  therefore also unsupported until that cell is repeated across seeds (C8).
+- The overlap-diagnostics figure labelled only the naive bars (the post-loop
+  `zip(ax.patches, of_vals)` paired all 12 bars with the last method's values)
+  and IGTD/naive OF/OP were hard-coded rather than measured; both are fixed in
+  `src/visualize.py` and `src/t2i/overlap_metrics.py` (items C2, C5).
+
 ### 12.4 Verdict
 The complete result set validates clean and sits inside every predicted band.
 Paper numbers should be quoted exclusively from `all_experiments.csv` + the
