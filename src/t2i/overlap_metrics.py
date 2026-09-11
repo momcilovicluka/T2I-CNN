@@ -81,29 +81,49 @@ def compute_overlap(coordinates, image_size=None):
 
 
 def compute_overlap_all_methods(X_train, y_train, image_size=32):
-    """Compute overlap diagnostics for all projection-based T2I methods.
+    """Compute overlap diagnostics for all four T2I methods.
 
-    IGTD is collision-free by design (OF=0, OP=0). Naive is
-deterministic (no overlap possible in pad-reshape). Only DeepInsight
-and TINTO can have coordinate collisions. s_igtd was dropped from the
-study 2026-09-03 (duplicated igtd; see paper-statement-guide PART 13i).
+    FIX (audit C5): IGTD's OF/OP are now MEASURED from its fitted coordinate
+    map instead of hard-coded to 0 (naive remains structurally 0 and is
+    annotated as such). DeepInsight and TINTO can have coordinate collisions.
+    s_igtd was dropped from the study 2026-09-03 (duplicated igtd; see
+    paper-statement-guide PART 13i).
 
     Returns:
         dict mapping method_name -> overlap_metrics_dict
     """
     results = {}
 
-    # Naive: no overlap possible (pad to grid, each feature gets unique position)
+    # Naive: collisions are undefined for a padded one-feature-per-cell grid
+    # that is then resized. Every feature has its own cell before the resize,
+    # so OF=OP=0 is structural, not measured — annotate that instead of
+    # emitting bare zeros (audit C5).
     results['naive'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0,
-                         'n_features': X_train.shape[1],
-                         'n_active_pixels': 0, 'n_overlapped_features': 0,
-                         'n_overlapped_pixels': 0}
-
-    # IGTD: collision-free by design
-    results['igtd'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0,
                         'n_features': X_train.shape[1],
-                        'n_active_pixels': 0, 'n_overlapped_features': 0,
-                        'n_overlapped_pixels': 0}
+                        'n_active_pixels': X_train.shape[1],
+                        'n_overlapped_features': 0,
+                        'n_overlapped_pixels': 0,
+                        'note': 'pad+reshape: one feature per grid cell before resize'}
+
+    # IGTD: MEASURED from the fitted coordinate map (audit C5), not asserted.
+    # TINTOlib's IGTD assigns the D features to unique cells (a one-row strip
+    # when D <= image_size), so OF/OP are expected to be 0 — but that must come
+    # from the coordinates, because a library/version change could alter it.
+    try:
+        from .igtd import IGTD
+        igtd = IGTD(image_size=image_size)
+        igtd.fit(X_train, y_train)
+        coords = igtd.get_coordinates()
+        if coords is not None:
+            base = compute_overlap(coords, image_size)
+            results['igtd'] = {**base, 'of_percent': base['OF'], 'op_percent': base['OP']}
+        else:
+            results['igtd'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0,
+                               'error': 'no coordinates'}
+    except Exception as e:
+        results['igtd'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0,
+                           'error': str(e)}
+
     # DeepInsight: can have overlaps
     try:
         from .deepinsight import DeepInsight

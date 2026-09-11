@@ -58,10 +58,17 @@ def shuffle_pixels(images, seed=42):
 
 
 def run_pixel_shuffling_ablation(dataset, t2i_method, cnn_arch, output_dir='results'):
-    """Ablation 1: Compare original vs shuffled pixel performance.
+    """Ablation 1: does the CNN actually NEED the spatial layout?
 
-    If shuffling drops F1 significantly -> spatial structure matters.
-    If shuffling has minimal effect -> CNN ignores spatial layout.
+    Two arms (FIX, audit C3):
+    - Arm A (f1_drop): train on ORIGINAL images, evaluate on a shuffled test
+      set. This is a distribution-shift / brittleness probe — it only shows
+      that a model trained on the original layout does not survive a permuted
+      input, which is not the same as showing that the layout carried signal.
+    - Arm B (retrain_drop): train AND evaluate on the SAME pixel permutation.
+      This is the structure test — if the shuffled-trained model recovers its
+      F1, the layout was not required and the CNN is learning from marginal
+      pixel statistics alone.
     """
     from src.preprocessing import preprocess_dataset
     from src.t2i import T2ITransformer
@@ -123,6 +130,32 @@ def run_pixel_shuffling_ablation(dataset, t2i_method, cnn_arch, output_dir='resu
     acc_drop = original_metrics['accuracy'] - shuffled_metrics['accuracy']
     print(f"  Delta:     F1={f1_drop:+.4f}, Acc={acc_drop:+.4f}")
 
+    # Arm B (FIX, audit C3): retrain on the shuffled images and evaluate on the
+    # shuffled test set, i.e. train and test see the SAME permutation. This is
+    # the actual "does spatial structure carry information" test.
+    print("  Retraining on shuffled images (arm B)...")
+    set_global_seed(42)
+    shuffled_train = shuffle_pixels(train_imgs, seed=42)
+    shuffled_val = shuffle_pixels(val_imgs, seed=42)
+    sh_train_loader, sh_val_loader = prepare_loaders(
+        shuffled_train, y_train, shuffled_val, y_val
+    )
+    model_shuffled = create_cnn_model(cnn_arch, num_classes)
+    model_shuffled, _ = train_model(
+        model_shuffled, sh_train_loader, sh_val_loader, dict(config_train)
+    )
+    shuffled_train_metrics = evaluate_model(model_shuffled, shuffled_loader, num_classes)
+    print(f"  Shuffled-trained: F1={shuffled_train_metrics['f1_macro']:.4f}, "
+          f"Acc={shuffled_train_metrics['accuracy']:.4f}")
+
+    # The honest headline keys on arm B: destroying the layout at TRAIN time is
+    # what tells us whether the layout was needed in the first place.
+    retrain_drop = original_metrics['f1_macro'] - shuffled_train_metrics['f1_macro']
+    if retrain_drop > 0.02:
+        conclusion = 'spatial_structure_matters'
+    else:
+        conclusion = 'layout_not_required_marginals_sufficient'
+
     result = {
         'ablation': 'pixel_shuffling',
         'dataset': dataset,
@@ -134,7 +167,15 @@ def run_pixel_shuffling_ablation(dataset, t2i_method, cnn_arch, output_dir='resu
         'original_acc': original_metrics['accuracy'],
         'shuffled_acc': shuffled_metrics['accuracy'],
         'acc_drop': acc_drop,
-        'conclusion': 'spatial_structure_matters' if f1_drop > 0.02 else 'minimal_spatial_effect',
+        # Arm B: trained AND evaluated on the same pixel permutation.
+        'shuffled_train_f1': shuffled_train_metrics['f1_macro'],
+        'shuffled_train_acc': shuffled_train_metrics['accuracy'],
+        'retrain_drop': retrain_drop,
+        'conclusion': conclusion,
+        'arm_legend': {
+            'f1_drop': 'train original -> test shuffled (brittleness / shift)',
+            'retrain_drop': 'train shuffled -> test shuffled (structure test)',
+        },
     }
 
     # Save
@@ -150,13 +191,35 @@ def run_pixel_shuffling_ablation(dataset, t2i_method, cnn_arch, output_dir='resu
 # ABLATION 2: Feature Ordering
 # ============================================================
 
-def reorder_features(X, order, y=None):
+def correlation_order(X, y):
+    """Column order by descending |corr(feature, target)|.
+
+    FIX (audit C1): compute this ONCE from the training split and reuse the
+    result for train/val/test. Recomputing it per split was the C1 bug — each
+    split then received a DIFFERENT column order, so the T2I layout no longer
+    aligned and test feature values were written at train-derived pixel
+    positions (2.34% of test pixels differed on breast_cancer, producing the
+    spurious 4.48/2.30/2.27 pp "correlation-sorted is worst" result).
+    """
+    corrs = np.abs(np.array([
+        np.corrcoef(X[:, i], y)[0, 1] if np.std(X[:, i]) > 0 else 0.0
+        for i in range(X.shape[1])
+    ]))
+    return np.argsort(-corrs)  # descending
+
+
+def reorder_features(X, order, y=None, perm=None):
     """Reorder feature columns according to specified strategy.
 
     Args:
         X: (N, d) feature matrix
         order: 'original', 'random', 'correlation', 'reversed'
-        y: labels (needed for 'correlation' ordering)
+        y: labels (fallback for 'correlation' when `perm` is None)
+        perm: precomputed permutation for 'correlation' (see correlation_order).
+            Pass the SAME permutation to every split, derived from the training
+            split. Recomputing per split scrambles the train/test alignment
+            (audit C1); the y-based fallback below is only safe for a
+            single-split sanity check.
 
     Returns:
         X_reordered: (N, d) with features reordered
@@ -166,17 +229,16 @@ def reorder_features(X, order, y=None):
     elif order == 'reversed':
         return X[:, ::-1]
     elif order == 'random':
-        rng = np.random.RandomState(42)
+        rng = np.random.RandomState(42)  # re-seeded -> same permutation per split
         perm = rng.permutation(X.shape[1])
         return X[:, perm]
     elif order == 'correlation':
-        # Sort features by absolute correlation with target
-        corrs = np.abs(np.array([
-            np.corrcoef(X[:, i], y)[0, 1] if np.std(X[:, i]) > 0 else 0
-            for i in range(X.shape[1])
-        ]))
-        sorted_idx = np.argsort(-corrs)  # descending
-        return X[:, sorted_idx]
+        if perm is None:
+            if y is None:
+                raise ValueError("'correlation' ordering needs a precomputed "
+                                 "perm or labels y")
+            perm = correlation_order(X, y)
+        return X[:, perm]
     else:
         raise ValueError(f"Unknown order: {order}")
 
@@ -207,14 +269,20 @@ def run_feature_ordering_ablation(dataset, t2i_method, cnn_arch, output_dir='res
     results = {}
     orderings = ['original', 'random', 'correlation', 'reversed']
 
+    # FIX (audit C1): ONE permutation from the training split, applied to every
+    # split. Previously each split was sorted by its own labels, so
+    # train/val/test received different column orders and the "correlation"
+    # cell measured a split misalignment rather than a layout effect.
+    corr_perm = correlation_order(X_train, y_train)
+
     for order in orderings:
         print(f"\n  Ordering: {order}")
         set_global_seed(42)  # Reset for fair comparison
 
-        # Reorder features
-        X_train_r = reorder_features(X_train, order, y_train)
-        X_val_r = reorder_features(X_val, order, y_val)
-        X_test_r = reorder_features(X_test, order, y_test)
+        # Reorder features with the SAME permutation on all three splits
+        X_train_r = reorder_features(X_train, order, y_train, perm=corr_perm)
+        X_val_r = reorder_features(X_val, order, y_val, perm=corr_perm)
+        X_test_r = reorder_features(X_test, order, y_test, perm=corr_perm)
 
         # Fit T2I on reordered features
         t2i = T2ITransformer(method=t2i_method, image_size=image_size)
@@ -256,6 +324,13 @@ def run_feature_ordering_ablation(dataset, t2i_method, cnn_arch, output_dir='res
         'results': results,
         'best_ordering': max(results, key=lambda k: results[k]['f1']),
         'worst_ordering': min(results, key=lambda k: results[k]['f1']),
+        # Audit C1 traceability: the correlation key is now a single
+        # train-derived permutation reused across splits, so for a
+        # column-order-invariant transform (DeepInsight) all four orderings are
+        # expected to collapse to identical F1.
+        'ordering_note': 'correlation permutation computed on train only and '
+                         'applied to train/val/test',
+        'correlation_perm': corr_perm.tolist(),
     }
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
@@ -377,6 +452,20 @@ def run_lpft_ablation(dataset, t2i_method, output_dir='results'):
         'results': results,
         'lpft_f1_advantage': f1_diff,
         'conclusion': 'lpft_better' if f1_diff > 0.01 else ('direct_better' if f1_diff < -0.01 else 'comparable'),
+        # Audit C4 traceability: the direct-FT arm is a SEPARATE run from the
+        # main-table resnet cell, not a reproduction of it (same config gave
+        # 98.63 here vs 97.22 in the main run on breast_cancer). Record the
+        # exact protocol so the figure/table can be reconciled or caveated.
+        'seed': 42,
+        'direct_ft_config': {
+            'lr': ARCH_LR['resnet'], 'epochs': 50,
+            'early_stopping_patience': 15, 'label_smoothing': 0.1,
+        },
+        'lpft_config': {
+            'lr': 1e-3, 'lr_ft': 1e-4, 'lp_epochs': 10, 'ft_epochs': 40,
+        },
+        'arm_note': 'direct_ft is an independent run, not a reproduction of the '
+                    'main-table resnet cell',
     }
 
     output_path = Path(output_dir)

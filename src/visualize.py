@@ -1015,9 +1015,10 @@ def plot_ablation_results(output_dir='results/figures'):
         ax.spines['right'].set_visible(False)
         plt.tight_layout(rect=(0, 0.14, 1, 1))
         fig.text(0.5, 0.02,
-                 'original = random = reversed for every dataset: DeepInsight derives pixel positions from feature '
-                 'relationships, so the layout is invariant to input column order; only the correlation-sorted key '
-                 'genuinely changes the layout.',
+                 'All four orderings apply ONE train-derived column permutation (audit C1): DeepInsight derives '
+                 'pixel positions from feature relationships, so the layout is invariant to input column order and '
+                 'the four bars are expected to be identical. The earlier "correlation-sorted is worst" result was '
+                 'a per-split permutation artefact and has been removed.',
                  ha='center', va='center', fontsize=8, style='italic', color='#555555')
         path = output_path / 'ch4_ablation_feature_ordering.png'
         fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
@@ -2274,23 +2275,27 @@ def plot_overlap_diagnostics(output_dir='results/figures'):
                 bar.set_hatch('/')
                 bar.set_alpha(0.4)
 
+        # FIX (audit C2): annotate THIS method's bars inside the loop. The old
+        # annotation ran after the loop and zipped ax.patches (all 12 bars) with
+        # the last method's values, so only the naive bars were labelled (with
+        # IGTD's zeros) and TINTO/DeepInsight were never annotated.
+        for bar, val in zip(bars, of_vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, max(bar.get_height(), 0.4),
+                    f'{val:.1f}', ha='center', va='bottom', fontsize=7.5,
+                    fontweight='bold', color='#333333' if val > 0 else '#777777')
+
     ax.set_xticks(x)
     ax.set_xticklabels([DATASET_LABELS[ds].split('\n')[0] for ds in DATASETS],
-
                        fontsize=10)
-
     ax.set_ylabel('Overlapped Features (%)')
     ax.set_title('Feature Overlap (OF)', fontsize=12, fontweight='bold')
     ax.legend(fontsize=8, bbox_to_anchor=(1.02, 1), loc='upper left')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    for bar, val in zip(ax.patches, of_vals):
-        ax.text(bar.get_x() + bar.get_width() / 2, max(bar.get_height(), 0.4),
-                f'{val:.1f}', ha='center', va='bottom', fontsize=7.5,
-                fontweight='bold', color='#333333' if val > 0 else '#777777')
-
-    ax.set_ylim(0, max(100, float(np.nanmax(of_vals)) * 1.15))
+    of_max = max(all_overlap[ds].get(m, {}).get('of_percent', 0)
+                 for ds in DATASETS for m in T2I_METHODS)
+    ax.set_ylim(0, max(100, of_max * 1.15))
 
 
 
@@ -2312,25 +2317,25 @@ def plot_overlap_diagnostics(output_dir='results/figures'):
                 bar.set_hatch('/')
                 bar.set_alpha(0.4)
 
-
+        # FIX (audit C2): annotate THIS method's bars inside the loop (see the
+        # OF panel above for why the old post-loop zip was wrong).
+        for bar, val in zip(bars, op_vals):
+            ax.text(bar.get_x() + bar.get_width() / 2, max(bar.get_height(), 0.4),
+                    f'{val:.1f}', ha='center', va='bottom', fontsize=7.5,
+                    fontweight='bold', color='#333333' if val > 0 else '#777777')
 
     ax.set_xticks(x)
     ax.set_xticklabels([DATASET_LABELS[ds].split('\n')[0] for ds in DATASETS],
-
                        fontsize=10)
-
     ax.set_ylabel('Overlapped Pixels (%)')
     ax.set_title('Pixel Overlap (OP)', fontsize=12, fontweight='bold')
     ax.legend(fontsize=8, bbox_to_anchor=(1.02, 1), loc='upper left')
     ax.spines['top'].set_visible(False)
     ax.spines['right'].set_visible(False)
 
-    for bar, val in zip(ax.patches, op_vals):
-        ax.text(bar.get_x() + bar.get_width() / 2, max(bar.get_height(), 0.4),
-                f'{val:.1f}', ha='center', va='bottom', fontsize=7.5,
-                fontweight='bold', color='#333333' if val > 0 else '#777777')
-
-    ax.set_ylim(0, max(100, float(np.nanmax(op_vals)) * 1.15))
+    op_max = max(all_overlap[ds].get(m, {}).get('op_percent', 0)
+                 for ds in DATASETS for m in T2I_METHODS)
+    ax.set_ylim(0, max(100, op_max * 1.15))
 
 
 
