@@ -90,18 +90,13 @@ T2I_LABELS = {
 
 }
 
-CNN_ARCHS = ['shallow', 'resnet', 'resnet_scratch', 'vit']
+CNN_ARCHS = ['shallow', 'resnet', 'resnet_scratch']
 
 CNN_LABELS = {
 
     'shallow': 'ShallowCNN',
 
-    'resnet': 'ResNet-18\n(pretrained)',
-
-    'resnet_scratch': 'ResNet-18\n(from scratch)',
-
-    'vit': 'ViT-Base',
-
+    'resnet': 'ResNet-18\n(pretrained)',    'resnet_scratch': 'ResNet-18\n(from scratch)',
 }
 
 BASELINES = ['rf', 'xgboost', 'mlp']
@@ -318,19 +313,13 @@ def plot_main_results_heatmap(results, output_dir='results/figures'):
 
         # Plot
 
+        # Custom colormap: white (low) -> blue (high). Removed ViT column
+        # (deferred architecture).
         fig, ax = plt.subplots(figsize=(8, 5))
-
-
-
-        # Custom colormap: white (low) -> blue (high)
 
         cmap = LinearSegmentedColormap.from_list('f1', ['#f0f0f0', '#2166ac', '#053061'])
 
-
-
         im = ax.imshow(matrix, cmap=cmap, aspect='auto', vmin=50, vmax=100)
-
-
 
         # Labels
 
@@ -341,8 +330,6 @@ def plot_main_results_heatmap(results, output_dir='results/figures'):
         ax.set_yticks(range(len(T2I_METHODS)))
 
         ax.set_yticklabels([T2I_LABELS[m] for m in T2I_METHODS], fontsize=11)
-
-
 
         # Annotate cells
 
@@ -360,8 +347,6 @@ def plot_main_results_heatmap(results, output_dir='results/figures'):
 
                             fontsize=12, fontweight='bold', color=color)
 
-
-
         # Colorbar
 
         cbar = fig.colorbar(im, ax=ax, shrink=0.8, label=F1_LABEL[dataset])
@@ -369,8 +354,6 @@ def plot_main_results_heatmap(results, output_dir='results/figures'):
         ax.set_title(f'{DATASET_LABELS[dataset]} — {F1_LABEL[dataset]}',
 
                      fontsize=13, fontweight='bold', pad=12)
-
-
 
         plt.tight_layout()
 
@@ -1026,11 +1009,12 @@ def plot_ablation_results(output_dir='results/figures'):
         ax.set_ylabel('F1 (%)')
         ax.set_title('Ablation: Feature Ordering (DeepInsight + ShallowCNN)',
                      fontsize=12, fontweight='bold')
-        ax.legend(fontsize=9, ncol=len(orderings), frameon=False)
+        ax.legend(fontsize=9, ncol=len(orderings), frameon=False,
+                  bbox_to_anchor=(0.5, -0.14), loc='upper center')
         ax.spines['top'].set_visible(False)
         ax.spines['right'].set_visible(False)
-        plt.tight_layout(rect=(0, 0.10, 1, 1))
-        fig.text(0.5, 0.035,
+        plt.tight_layout(rect=(0, 0.14, 1, 1))
+        fig.text(0.5, 0.02,
                  'original = random = reversed for every dataset: DeepInsight derives pixel positions from feature '
                  'relationships, so the layout is invariant to input column order; only the correlation-sorted key '
                  'genuinely changes the layout.',
@@ -1170,85 +1154,97 @@ def plot_density_vs_performance(results, output_dir='results/figures'):
 
         return
 
-
-
-    fig, ax = plt.subplots(figsize=(8, 5))
-
-
-
-    marker_map = {'shallow': 'o', 'resnet': 's', 'resnet_scratch': '^', 'vit': 'D'}
+    fig, axes = plt.subplots(1, 3, figsize=(15, 6), sharey=True)
 
     color_map = {'naive': '#c44e52', 'tinto': '#8172b2', 'deepinsight': '#4c72b0',
-
                  'igtd': '#55a868'}
+    method_order = ['naive', 'tinto', 'deepinsight', 'igtd']
+    arch_order = ['shallow', 'resnet', 'resnet_scratch']
+    # Vertical in-bar labels. They replace the old side legend, so each bar
+    # names its own architecture (readable without a key).
+    arch_vlabel = {'shallow': 'ShallowCNN', 'resnet': 'ResNet (pre)',
+                   'resnet_scratch': 'ResNet (scratch)'}
+
+    for idx, dataset in enumerate(DATASETS):
+
+        ax = axes[idx]
+
+        ds_results = [r for r in cnn_results if r['dataset'] == dataset]
+
+        if not ds_results:
+
+            ax.axis('off')
+
+            continue
 
 
-
-    for r in cnn_results:
-
-        # Estimate density from dataset and image_size
-
-        # Authoritative feature counts (post-fix adult: 45,222 rows -> 6 numerical
-
-        # + 98 one-hot = 104 features; audit 2026-09-03, see paper-statement-guide
-
-        # PART 15b). image_size is taken per-result from the JSON.
 
         feature_counts = {'breast_cancer': 30, 'dry_bean': 16, 'adult_income': 104}
 
-        n_feat = feature_counts.get(r['dataset'], 30)
+        n_feat = feature_counts.get(dataset, 30)
 
-        img_size = r.get('image_size', 32)
+        img_size = 32
 
         density = n_feat / (img_size * img_size) * 100
 
+        # build matrix: rows=methods, cols=architectures
+        matrix = {m: {a: np.nan for a in arch_order} for m in method_order}
+        for r in ds_results:
+
+            if r['t2i_method'] in matrix and r['cnn_arch'] in matrix[r['t2i_method']]:
+                matrix[r['t2i_method']][r['cnn_arch']] = r['f1_macro'] * 100
+
+        n_methods = len(method_order)
+        n_archs = len(arch_order)
+        x = np.arange(n_methods)
+        width = 0.22
+
+        for j, arch in enumerate(arch_order):
+
+            vals = [matrix[m][arch] for m in method_order]
+            offset = (j - (n_archs - 1) / 2) * width
+            _ = ax.bar(x + offset, vals, width,
+                       color=[color_map[m] for m in method_order],
+                       edgecolor='white', linewidth=0.6)
+
+            # Architecture key: a vertical label that starts at the bottom of
+            # every bar and runs up along it (bottom-to-top), on all methods.
+            # White bold stays legible on all four method colours.
+            for i, m in enumerate(method_order):
+
+                v = matrix[m][arch]
+                if not np.isnan(v):
+                    ax.text(x[i] + offset, 1.5, arch_vlabel[arch],
+                            rotation=90, rotation_mode='anchor',
+                            ha='left', va='center', fontsize=7,
+                            color='white', fontweight='bold', zorder=4)
+
+        ax.set_xticks(x)
+        ax.set_xticklabels([T2I_LABELS[m] for m in method_order], fontsize=9)
+        ax.set_xlabel('T2I Method', fontsize=10)
+        ax.set_ylabel('Macro-F1 (%)', fontsize=10)
+        ax.set_title('{} — density {:.1f}%'.format(
+            DATASET_LABELS[dataset].splitlines()[0], density),
+            fontsize=11, fontweight='bold')
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.set_ylim(0, 100)
+
+        # value labels above bars, skipping NaNs
+        for j, arch in enumerate(arch_order):
+
+            offset = (j - (n_archs - 1) / 2) * width
+            for i, m in enumerate(method_order):
+
+                v = matrix[m][arch]
+                if not np.isnan(v):
+                    ax.text(x[i] + offset, v + 1.0, f'{v:.1f}',
+                            ha='center', va='bottom', fontsize=7.5, color='#333333')
 
 
-        ax.scatter(density, r['f1_macro'] * 100,
+    fig.suptitle('Feature Density vs Classification Performance (per dataset)',
 
-                   c=color_map.get(r['t2i_method'], 'gray'),
-
-                   marker=marker_map.get(r['cnn_arch'], 'o'),
-
-                   s=80, alpha=0.7, edgecolors='white', linewidth=0.5)
-
-
-
-    # Add legend
-
-    from matplotlib.lines import Line2D
-
-    method_handles = [Line2D([0], [0], marker='o', color='w', markerfacecolor=color_map[m],
-
-                             markersize=10, label=T2I_LABELS[m]) for m in T2I_METHODS]
-
-    arch_handles = [Line2D([0], [0], marker=marker_map[a], color='w', markerfacecolor='gray',
-
-                           markersize=10, label=CNN_LABELS[a].split('\n')[0]) for a in CNN_ARCHS]
-
-
-
-    leg1 = ax.legend(handles=method_handles, title='T2I Method', loc='lower right', fontsize=9)
-
-    ax.add_artist(leg1)
-
-    ax.legend(handles=arch_handles, title='Architecture', loc='lower center', fontsize=9)
-
-
-
-    ax.set_xlabel('Feature Density (%)')
-
-    ax.set_ylabel('Macro-F1 (%)')
-
-    ax.set_title('Feature Density vs Classification Performance',
-
-                 fontsize=13, fontweight='bold')
-
-    ax.spines['top'].set_visible(False)
-
-    ax.spines['right'].set_visible(False)
-
-
+                 fontsize=13, fontweight='bold', y=1.02)
 
     plt.tight_layout()
 
@@ -1758,7 +1754,7 @@ def plot_runtime_comparison(results, output_dir='results/figures'):
 
 
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=False)
 
 
 
@@ -1820,9 +1816,9 @@ def plot_runtime_comparison(results, output_dir='results/figures'):
 
                            rotation=45, ha='right', fontsize=9)
 
-        ax.set_ylabel('Total Time (s)' if (idx == 0 and has_total)
+        ylabel = 'Total Time (s)' if has_total else 'Training Time (s)'
 
-                     else ('Training Time (s)' if idx == 0 else ''))
+        ax.set_ylabel(ylabel if idx == 0 else '')
 
         ax.set_title(DATASET_LABELS[dataset].split('\n')[0],
 
@@ -2224,15 +2220,24 @@ def plot_overlap_diagnostics(output_dir='results/figures'):
 
         print(f"  Computing overlap for {dataset}...")
 
-        data = preprocess_dataset(dataset)
+        try:
 
-        X_train = data['X_train']
+            data = preprocess_dataset(dataset)
 
-        y_train = data['y_train']
+            X_train = data['X_train']
 
-        overlap = compute_overlap_all_methods(X_train, y_train, image_size=32)
+            y_train = data['y_train']
 
-        all_overlap[dataset] = overlap
+            overlap = compute_overlap_all_methods(X_train, y_train, image_size=32)
+
+            all_overlap[dataset] = overlap
+
+        except Exception as e:
+
+            print(f"  Overlap computation failed for {dataset}: {e}")
+
+            all_overlap[dataset] = {}
+
 
 
 
@@ -2257,64 +2262,75 @@ def plot_overlap_diagnostics(output_dir='results/figures'):
     for j, method in enumerate(T2I_METHODS):
 
         of_vals = [all_overlap[ds].get(method, {}).get('of_percent', 0) for ds in DATASETS]
+        is_zero_method = method in ('naive', 'igtd')
+        bars = ax.bar(x + j * width - 0.4 + width/2, of_vals, width,
+                      label=T2I_LABELS[method],
+                      color=method_colors.get(method, 'gray'),
+                      edgecolor='white', linewidth=0.5,
+                      fill=not is_zero_method)
 
-        ax.bar(x + j * width - 0.4 + width/2, of_vals, width,
-
-               label=T2I_LABELS[method], color=method_colors.get(method, 'gray'),
-
-               edgecolor='white', linewidth=0.5)
-
-
+        if is_zero_method:
+            for bar in bars:
+                bar.set_hatch('/')
+                bar.set_alpha(0.4)
 
     ax.set_xticks(x)
-
     ax.set_xticklabels([DATASET_LABELS[ds].split('\n')[0] for ds in DATASETS],
 
                        fontsize=10)
 
     ax.set_ylabel('Overlapped Features (%)')
-
     ax.set_title('Feature Overlap (OF)', fontsize=12, fontweight='bold')
-
-    ax.legend(fontsize=8)
-
+    ax.legend(fontsize=8, bbox_to_anchor=(1.02, 1), loc='upper left')
     ax.spines['top'].set_visible(False)
-
     ax.spines['right'].set_visible(False)
+
+    for bar, val in zip(ax.patches, of_vals):
+        ax.text(bar.get_x() + bar.get_width() / 2, max(bar.get_height(), 0.4),
+                f'{val:.1f}', ha='center', va='bottom', fontsize=7.5,
+                fontweight='bold', color='#333333' if val > 0 else '#777777')
+
+    ax.set_ylim(0, max(100, float(np.nanmax(of_vals)) * 1.15))
 
 
 
     # Plot OP (Percentage of Overlapped Pixels)
 
     ax = axes[1]
-
     for j, method in enumerate(T2I_METHODS):
 
         op_vals = [all_overlap[ds].get(method, {}).get('op_percent', 0) for ds in DATASETS]
+        is_zero_method = method in ('naive', 'igtd')
+        bars = ax.bar(x + j * width - 0.4 + width/2, op_vals, width,
+                      label=T2I_LABELS[method],
+                      color=method_colors.get(method, 'gray'),
+                      edgecolor='white', linewidth=0.5,
+                      fill=not is_zero_method)
 
-        ax.bar(x + j * width - 0.4 + width/2, op_vals, width,
-
-               label=T2I_LABELS[method], color=method_colors.get(method, 'gray'),
-
-               edgecolor='white', linewidth=0.5)
+        if is_zero_method:
+            for bar in bars:
+                bar.set_hatch('/')
+                bar.set_alpha(0.4)
 
 
 
     ax.set_xticks(x)
-
     ax.set_xticklabels([DATASET_LABELS[ds].split('\n')[0] for ds in DATASETS],
 
                        fontsize=10)
 
     ax.set_ylabel('Overlapped Pixels (%)')
-
     ax.set_title('Pixel Overlap (OP)', fontsize=12, fontweight='bold')
-
-    ax.legend(fontsize=8)
-
+    ax.legend(fontsize=8, bbox_to_anchor=(1.02, 1), loc='upper left')
     ax.spines['top'].set_visible(False)
-
     ax.spines['right'].set_visible(False)
+
+    for bar, val in zip(ax.patches, op_vals):
+        ax.text(bar.get_x() + bar.get_width() / 2, max(bar.get_height(), 0.4),
+                f'{val:.1f}', ha='center', va='bottom', fontsize=7.5,
+                fontweight='bold', color='#333333' if val > 0 else '#777777')
+
+    ax.set_ylim(0, max(100, float(np.nanmax(op_vals)) * 1.15))
 
 
 

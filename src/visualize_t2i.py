@@ -103,6 +103,7 @@ def plot_pixel_density_comparison():
     # Grid rows = T2I methods (4), columns = datasets (3). A (3,3) grid would
     # overrun on the 4th method (IndexError) — rows must match len(methods).
     fig, axes = plt.subplots(len(methods), len(datasets), figsize=(12, 4 * len(methods)))
+    fig.subplots_adjust(top=0.82, hspace=0.6, wspace=0.25)
 
     for col_idx, dataset_name in enumerate(datasets):
         data = preprocess_dataset(dataset_name)
@@ -118,6 +119,7 @@ def plot_pixel_density_comparison():
 
             # Pick one sample from the most frequent class
             most_freq_class = classes[np.argmax(np.bincount(y_train))]
+
             sample_idx = np.where(y_train == most_freq_class)[0][0]
             img = images[sample_idx, 0].numpy()
 
@@ -125,29 +127,24 @@ def plot_pixel_density_comparison():
             density = (img > 0.01).sum() / img.size * 100
 
             axes[row_idx, col_idx].imshow(img, cmap='gray', vmin=0, vmax=1)
-            axes[row_idx, col_idx].set_title(
-                f'{method_labels[row_idx]}\nDensity: {density:.1f}%',
-                fontsize=11
-            )
+            axes[row_idx, col_idx].set_title(method_labels[row_idx], fontsize=11, fontweight='bold')
             axes[row_idx, col_idx].set_xticks([])
             axes[row_idx, col_idx].set_yticks([])
+            axes[row_idx, col_idx].set_xlabel(f'Density: {density:.1f}%',
+                                              fontsize=8, color='#333333', labelpad=4)
 
-            # Dataset label on the right side of first row
-            if row_idx == 0:
-                pass  # title already there
-
-    # Add dataset labels on top
+    # Dataset labels above each column (separated from panel titles and suptitle)
     for col_idx, label in enumerate(dataset_labels):
         axes[0, col_idx].set_xlabel('')  # clear
         fig.text(
-            0.22 + col_idx * 0.28, 1.01, label,
-            ha='center', fontsize=13, fontweight='bold',
+            0.22 + col_idx * 0.28, 0.905, label,
+            ha='center', fontsize=12, fontweight='bold',
             transform=fig.transFigure
         )
 
     fig.suptitle('Feature Density Comparison: Naive vs Intelligent Arrangement',
-                 fontsize=15, fontweight='bold', y=1.03)
-    plt.tight_layout()
+                 fontsize=14, fontweight='bold', y=0.975)
+    return fig
     return fig
 
 

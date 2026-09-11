@@ -94,25 +94,29 @@ study 2026-09-03 (duplicated igtd; see paper-statement-guide PART 13i).
     results = {}
 
     # Naive: no overlap possible (pad to grid, each feature gets unique position)
-    results['naive'] = {'OF': 0.0, 'OP': 0.0, 'n_features': X_train.shape[1],
+    results['naive'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0,
+                         'n_features': X_train.shape[1],
                          'n_active_pixels': 0, 'n_overlapped_features': 0,
                          'n_overlapped_pixels': 0}
 
     # IGTD: collision-free by design
-    results['igtd'] = {'OF': 0.0, 'OP': 0.0, 'n_features': X_train.shape[1],
+    results['igtd'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0,
+                        'n_features': X_train.shape[1],
                         'n_active_pixels': 0, 'n_overlapped_features': 0,
-                        'n_overlapped_pixels': 0}    # DeepInsight: can have overlaps
+                        'n_overlapped_pixels': 0}
+    # DeepInsight: can have overlaps
     try:
         from .deepinsight import DeepInsight
         di = DeepInsight(image_size=image_size)
         di.fit(X_train, y_train)
         coords = di.get_coordinates()
         if coords is not None:
-            results['deepinsight'] = compute_overlap(coords, image_size)
+            base = compute_overlap(coords, image_size)
+            results['deepinsight'] = {**base, 'of_percent': base['OF'], 'op_percent': base['OP']}
         else:
-            results['deepinsight'] = {'OF': 0.0, 'OP': 0.0, 'error': 'no coordinates'}
+            results['deepinsight'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0, 'error': 'no coordinates'}
     except Exception as e:
-        results['deepinsight'] = {'OF': 0.0, 'OP': 0.0, 'error': str(e)}
+        results['deepinsight'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0, 'error': str(e)}
 
     # TINTO: can have overlaps (uses PCA/t-SNE like DeepInsight)
     try:
@@ -121,10 +125,11 @@ study 2026-09-03 (duplicated igtd; see paper-statement-guide PART 13i).
         tinto.fit(X_train, y_train)
         coords = tinto.get_coordinates()
         if coords is not None:
-            results['tinto'] = compute_overlap(coords, image_size)
+            base = compute_overlap(coords, image_size)
+            results['tinto'] = {**base, 'of_percent': base['OF'], 'op_percent': base['OP']}
         else:
-            results['tinto'] = {'OF': 0.0, 'OP': 0.0, 'error': 'no coordinates'}
+            results['tinto'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0, 'error': 'no coordinates'}
     except Exception as e:
-        results['tinto'] = {'OF': 0.0, 'OP': 0.0, 'error': str(e)}
+        results['tinto'] = {'OF': 0.0, 'OP': 0.0, 'of_percent': 0.0, 'op_percent': 0.0, 'error': str(e)}
 
     return results
