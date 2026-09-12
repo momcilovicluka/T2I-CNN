@@ -979,50 +979,142 @@ def plot_ablation_results(output_dir='results/figures'):
 
         plt.close(fig)
 
-        print(f"  Saved: {path.name}")
+        print(f"  Saved: {path.name}")    # Feature Ordering
 
+    # C1 add-on: this figure must handle MORE THAN ONE T2I method. With only the
 
+    # DeepInsight run present the four bars are identical (its layout is
 
-    # Feature Ordering
+    # provably invariant to column order) — an invariance result rather than a
+
+    # demonstration that ordering matters. The naive run, where each column maps
+
+    # straight onto a pixel, supplies the contrast. Keying the data on dataset
+
+    # alone silently dropped one method once both existed.
+
     ordering_results = load_ablation_results('results', 'ablation_feature_ordering_')
+
     if ordering_results:
+
         # original vs random vs correlation vs reversed ordering of the input columns.
+
         # F1 semantics: macro for the 7-class dry_bean, positive-class otherwise (PART 13e).
-        fig, ax = plt.subplots(figsize=(9, 5.4))
+
+        by_cell = {(r['dataset'], r['t2i_method']): r for r in ordering_results}
+
+        pref = ['deepinsight', 'naive', 'tinto', 'igtd']
+
+        methods = sorted({cell[1] for cell in by_cell},
+
+                         key=lambda m: pref.index(m) if m in pref else 99)
+
         orderings = ['original', 'random', 'correlation', 'reversed']
+
         colors = {'original': '#4c72b0', 'random': '#55a868',
+
                   'correlation': '#c44e52', 'reversed': '#8172b3'}
-        by_ds = {r['dataset']: r for r in ordering_results}
-        items = [(ds, by_ds[ds]) for ds in DATASETS if ds in by_ds]
-        n = len(items)
-        x = np.arange(n)
+
+        fig, axes = plt.subplots(1, len(methods), figsize=(6.2 * len(methods), 5.4),
+
+                                 sharey=True, squeeze=False)
+
+        axes = axes[0]
+
         width = 0.2
-        for i, o in enumerate(orderings):
-            vals = [items[j][1]['results'][o]['f1'] * 100 for j in range(n)]
-            bars = ax.bar(x + (i - 1.5) * width, vals, width, label=o.capitalize(),
-                          color=colors[o], edgecolor='white')
-            for bar, val in zip(bars, vals):
-                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
-                        f'{val:.1f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
-        ax.set_xticks(x)
-        ax.set_xticklabels([DATASET_LABELS[ds].splitlines()[0] for ds, _ in items], fontsize=10)
-        ax.set_ylabel('F1 (%)')
-        ax.set_title('Ablation: Feature Ordering (DeepInsight + ShallowCNN)',
-                     fontsize=12, fontweight='bold')
-        ax.legend(fontsize=9, ncol=len(orderings), frameon=False,
-                  bbox_to_anchor=(0.5, -0.14), loc='upper center')
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        plt.tight_layout(rect=(0, 0.14, 1, 1))
-        fig.text(0.5, 0.02,
-                 'All four orderings apply ONE train-derived column permutation (audit C1): DeepInsight derives '
-                 'pixel positions from feature relationships, so the layout is invariant to input column order and '
-                 'the four bars are expected to be identical. The earlier "correlation-sorted is worst" result was '
-                 'a per-split permutation artefact and has been removed.',
-                 ha='center', va='center', fontsize=8, style='italic', color='#555555')
+
+        for ax, method in zip(axes, methods):
+
+            items = [(ds, by_cell[(ds, method)]) for ds in DATASETS
+
+                     if (ds, method) in by_cell]
+
+            n = len(items)
+
+            x = np.arange(n)
+
+            for i, o in enumerate(orderings):
+
+                vals = [items[j][1]['results'][o]['f1'] * 100 for j in range(n)]
+
+                bars = ax.bar(x + (i - 1.5) * width, vals, width, label=o.capitalize(),
+
+                              color=colors[o], edgecolor='white')
+
+                for bar, val in zip(bars, vals):
+
+                    ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+
+                            f'{val:.1f}', ha='center', va='bottom', fontsize=8, fontweight='bold')
+
+            ax.set_xticks(x)
+
+            ax.set_xticklabels([DATASET_LABELS[ds].splitlines()[0] for ds, _ in items],
+
+                               fontsize=10)
+
+            ax.set_title(f'{T2I_LABELS.get(method, method)} + ShallowCNN',
+
+                         fontsize=11, fontweight='bold')
+
+            ax.spines['top'].set_visible(False)
+
+            ax.spines['right'].set_visible(False)
+
+        axes[0].set_ylabel('F1 (%)')
+
+        handles, labels = axes[0].get_legend_handles_labels()
+
+        fig.legend(handles, labels, fontsize=9, ncol=len(orderings), frameon=False,
+
+                   bbox_to_anchor=(0.5, 0.10), loc='upper center')
+
+        fig.suptitle('Ablation: Feature Ordering (one train-derived column permutation, audit C1)',
+
+                     fontsize=12, fontweight='bold', y=0.99)
+
+        plt.tight_layout(rect=(0, 0.16, 1, 0.94))
+
+        if 'naive' in methods:
+
+            note = ('All four orderings apply ONE train-derived column permutation (audit C1). '
+
+                    'For DeepInsight the layout is derived from feature relationships, so the four '
+
+                    'bars coincide — an invariance result, not evidence about ordering. For the naive '
+
+                    'layout each column maps straight onto a pixel, so the bars separate: that '
+
+                    'contrast is what shows the input ordering can matter at all. The earlier '
+
+                    '"correlation-sorted is worst" finding was a per-split permutation artefact and '
+
+                    'has been removed.')
+
+        else:
+
+            note = ('All four orderings apply ONE train-derived column permutation (audit C1): '
+
+                    'DeepInsight derives pixel positions from feature relationships, so the layout is '
+
+                    'invariant to input column order and the four bars are expected to be identical. '
+
+                    'Run the same ablation with --t2i naive for the contrast that demonstrates an '
+
+                    'ordering effect. The earlier "correlation-sorted is worst" finding was a '
+
+                    'per-split permutation artefact and has been removed.')
+
+        fig.text(0.5, 0.02, note, ha='center', va='center', fontsize=8,
+
+                 style='italic', color='#555555')
+
         path = output_path / 'ch4_ablation_feature_ordering.png'
+
         fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+
         plt.close(fig)
+
         print(f"  Saved: {path.name}")
 
     # LP-FT vs Direct FT
