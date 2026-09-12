@@ -27,6 +27,16 @@ import time
 from pathlib import Path
 
 
+def format_duration(seconds):
+    """Compact human duration for progress lines ('42s', '3m 07s', '1h 12m')."""
+    seconds = int(max(0, seconds))
+    if seconds < 60:
+        return f'{seconds}s'
+    if seconds < 3600:
+        return f'{seconds // 60}m {seconds % 60:02d}s'
+    return f'{seconds // 3600}h {(seconds % 3600) // 60:02d}m'
+
+
 def set_global_seed(seed=42):
     """Set all random seeds for reproducibility.
 
@@ -129,6 +139,15 @@ def train_model(model, train_loader, val_loader, config):
     # ImageNet normalization; see uses_imagenet_normalization.
     use_imagenet_norm = uses_imagenet_normalization(model)
 
+    # Announce the run before the first epoch: a long training used to print
+    # nothing at all until its first update, so a stuck-looking cell was
+    # indistinguishable from a working one.
+    print(f"  Training {type(model).__name__}: up to {epochs} epochs, early stop "
+          f"after {patience} flat epochs, lr {lr:.1e}, "
+          f"{len(train_loader.dataset)} train / {len(val_loader.dataset)} val "
+          f"images, device {device}", flush=True)
+
+    train_start = time.time()
     epoch_start = time.time()
     for epoch in range(epochs):
         # --- Training ---
@@ -181,13 +200,24 @@ def train_model(model, train_loader, val_loader, config):
         else:
             epochs_no_improve += 1
 
-        # Progress update every epoch
+        # Progress update every epoch: percentage complete, both losses, the
+        # epoch's wall time, elapsed time and an ETA, so a running job is
+        # monitorable from the cell output alone.
         epoch_time = time.time() - epoch_start
         epoch_start = time.time()
         lr_now = optimizer.param_groups[0]['lr']
         improved = '*' if epochs_no_improve == 0 else ''
-        print(f"    Epoch {epoch+1:2d}/{epochs}: loss={train_loss:.4f}/{val_loss:.4f} "
-              f"acc={val_acc:.4f} lr={lr_now:.1e} [{epoch_time:.1f}s]{improved}", flush=True)
+        done = epoch + 1
+        elapsed = time.time() - train_start
+        # ETA is an UPPER BOUND: early stopping usually ends the run sooner,
+        # hence 'eta<=' rather than a flat estimate.
+        eta = (elapsed / done) * (epochs - done)
+        print(f"    epoch {done:3d}/{epochs} {done / epochs * 100:3.0f}% | "
+              f"loss {train_loss:.4f}/{val_loss:.4f} | acc {val_acc:.4f} | "
+              f"lr {lr_now:.1e} | {epoch_time:.1f}s/ep | "
+              f"elapsed {format_duration(elapsed)} | "
+              f"eta<={format_duration(eta)}{' ' + improved if improved else ''}",
+              flush=True)
 
         if epochs_no_improve >= patience:
             print(f"    Early stopping at epoch {epoch+1} (no improvement for {patience} epochs)", flush=True)

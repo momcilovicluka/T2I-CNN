@@ -2582,6 +2582,8 @@ def main():
 
 
     print(f"\nAll figures saved to {Path(args.results_dir) / 'figures'}/")
+    from src.colab_sync import sync_figures
+    print(f"[sync] mirrored {sync_figures(str(Path(args.results_dir) / 'figures'))} figure file(s)")
 
 
 

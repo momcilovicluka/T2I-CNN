@@ -169,6 +169,8 @@ def main():
     fig.savefig(out, dpi=args.dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"Saved: {out} ({out.stat().st_size/1024:.0f} KiB, dpi={args.dpi})")
+    from src.colab_sync import sync_path
+    sync_path(out)
 
 
 if __name__ == "__main__":

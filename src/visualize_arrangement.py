@@ -251,6 +251,8 @@ def main():
     print('\n=== Arrangement quality (correlation vs distance) ===')
     plot_arrangement_quality(ds_list, args.output_dir)
     print('\nDone.')
+    from src.colab_sync import sync_figures
+    print(f'[sync] mirrored {sync_figures(str(Path(args.output_dir)))} figure file(s)')
 
 
 if __name__ == '__main__':

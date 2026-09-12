@@ -180,6 +180,8 @@ def main():
     print(f"  Saved: {path}")
 
     print("\nAll figures saved to results/figures/")
+    from src.colab_sync import sync_figures
+    print(f"[sync] mirrored {sync_figures()} figure file(s)")
 
 
 if __name__ == '__main__':

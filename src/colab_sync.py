@@ -104,6 +104,16 @@ def sync_tree(root='results'):
     return sum(1 for p in sorted(root.rglob('*')) if p.is_file() and sync_path(p))
 
 
+def sync_figures(figures_dir='results/figures'):
+    """Mirror a whole figure directory after a plotting script finishes.
+
+    The per-experiment hooks cover result JSONs, weights and the summary CSV, but
+    the figure scripts write many files in one go and are called explicitly, so
+    they mirror their own output here rather than leaving it to the closing pass.
+    """
+    return sync_tree(figures_dir)
+
+
 def restore(sync_dir=None, dest='results'):
     """Copy a previous session's mirror back into the working tree.
 
