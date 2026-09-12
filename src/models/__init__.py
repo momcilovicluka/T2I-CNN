@@ -8,10 +8,21 @@ from .vit_wrapper import ViTWrapper
 
 
 def get_model(name, num_classes=2, **kwargs):
-    """Factory function to get a model by name."""
+    """Factory function to get a model by name.
+
+    Audit C14: 'resnet_scratch' is included so this public factory matches the
+    architectures the study actually runs. It defaults to random init and
+    1-channel input — the same configuration run_all.py uses (see
+    run_all.create_cnn_model for the documented pretrained-vs-scratch input
+    confound).
+    """
+    if name == 'resnet_scratch':
+        kwargs.setdefault('pretrained', False)
+        kwargs.setdefault('input_channels', 1)
     models = {
         'shallow': ShallowCNN,
         'resnet': ResNetWrapper,
+        'resnet_scratch': ResNetWrapper,
         'vit': ViTWrapper,
     }
     if name not in models:
@@ -24,7 +35,7 @@ def verify_all_models():
     import torch
 
     x = torch.randn(4, 1, 32, 32)
-    for name in ['shallow', 'resnet', 'vit']:
+    for name in ['shallow', 'resnet', 'resnet_scratch', 'vit']:
         try:
             model = get_model(name, num_classes=2)
             out = model(x)

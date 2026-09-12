@@ -54,6 +54,11 @@ def _load_tinto_images(temp_dir, N, y):
 def compute_optimal_image_size(n_features, min_size=8, max_size=64):
     """Compute image size based on feature count.
 
+    NOTE (audit C20): reference utility only — NOT part of the final protocol.
+    The study fixes image_size=32 for all three datasets and no caller ever
+    passes auto_size=True (see T2ITransformer below), so this function does not
+    execute in any reported run. Do not present it as a method component.
+
     WHY (Concern 8 — 32x32 too small for 104 features):
     Feature density = n_features / image_size^2. With 104 features on
     32x32 = 1024 pixels, density = 10.2%. CNN kernels (3x3) see mostly
@@ -102,7 +107,9 @@ class T2ITransformer:
             method: 'naive', 'deepinsight', or 'igtd'
             image_size: int, output image dimension (H=W)
             auto_size: bool, if True, compute image_size from n_features
-                in fit() to ensure sufficient feature density
+                in fit() to ensure sufficient feature density.
+                NOTE (audit C20): run_all.py never sets this to True; every
+                reported experiment uses the fixed 32x32 images.
         """
         if method not in self.METHODS:
             raise ValueError(f"Unknown method: {method}. Choose from {list(self.METHODS)}")

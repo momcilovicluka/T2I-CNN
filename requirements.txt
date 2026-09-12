@@ -1,3 +1,22 @@
+# ---------------------------------------------------------------------------
+# REPRODUCIBILITY NOTE (audit C16)
+#
+# The bounds below say "at least", which is NOT enough to reproduce the
+# reported numbers exactly. For the submission, freeze the environment that
+# produced the final run and install from that:
+#
+#     !pip freeze | grep -Ei 'torch|scikit-learn|xgboost|matplotlib|tinto|timm|pandas|numpy' \
+#         > requirements-lock.txt
+#
+# Version-sensitive places in this codebase:
+#   * matplotlib >= 3.9 removed `matplotlib.cm.get_cmap`; src/gradcam.py now
+#     uses `matplotlib.colormaps['jet']`.
+#   * xgboost >= 2.0 deprecated — and >= 3.0 removed — `use_label_encoder`;
+#     src/baselines/xgboost_model.py now passes it only on major < 2.
+#   * TINTOlib / timm / torchvision drift changes the T2I layouts and the
+#     pretrained weights, i.e. the very inputs the study measures.
+# ---------------------------------------------------------------------------
+
 torch>=2.0.0
 torchvision>=0.15.0
 timm>=0.9.0
@@ -11,3 +30,11 @@ grad-cam>=1.4.0
 umap-learn>=0.5.3
 tqdm>=4.65.0
 pyyaml>=6.0
+
+# Imported by src/t2i/{tinto,deepinsight,igtd}.py but missing from the original
+# list. The T2I layouts — and therefore every CNN result — depend on this exact
+# version, so pin it (or record the source URL/commit if installed from git).
+TINTOlib
+
+# Listed but not imported anywhere in the codebase (visualisation extras only;
+# safe to drop when building the lock file): seaborn, umap-learn, tqdm, pyyaml.

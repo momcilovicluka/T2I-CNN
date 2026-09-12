@@ -93,7 +93,13 @@ def plot_comparison(dataset_name, image_size=32):
 
 
 def plot_pixel_density_comparison():
-    """Show how feature density varies across methods and datasets."""
+    """Show how much of each rendered image is non-zero, by method and dataset.
+
+    NOTE (audit C17): the number printed under each panel is the fraction of
+    pixels with value > 0.01 ('non-zero pixels', i.e. image coverage). It is
+    NOT the study's feature density (n_features / H*W, §3.2.6) — that one is
+    annotated in the panel titles of ch4_density_vs_performance.png.
+    """
     datasets = ['breast_cancer', 'dry_bean', 'adult_income']
     dataset_labels = ['Breast Cancer\n(30 feat)', 'Dry Bean\n(16 feat)', 'Adult Income\n(104 feat)']
     methods = ['naive', 'tinto', 'deepinsight', 'igtd']
@@ -123,14 +129,17 @@ def plot_pixel_density_comparison():
             sample_idx = np.where(y_train == most_freq_class)[0][0]
             img = images[sample_idx, 0].numpy()
 
-            # Compute density
-            density = (img > 0.01).sum() / img.size * 100
+            # C17: this is the fraction of NON-ZERO pixels in the rendered
+            # image, which is a different quantity from the study's feature
+            # density (n_features / H*W). Name and label it accordingly so the
+            # two are never conflated.
+            nonzero_pct = (img > 0.01).sum() / img.size * 100
 
             axes[row_idx, col_idx].imshow(img, cmap='gray', vmin=0, vmax=1)
             axes[row_idx, col_idx].set_title(method_labels[row_idx], fontsize=11, fontweight='bold')
             axes[row_idx, col_idx].set_xticks([])
             axes[row_idx, col_idx].set_yticks([])
-            axes[row_idx, col_idx].set_xlabel(f'Density: {density:.1f}%',
+            axes[row_idx, col_idx].set_xlabel(f'non-zero pixels: {nonzero_pct:.1f}%',
                                               fontsize=8, color='#333333', labelpad=4)
 
     # Dataset labels above each column (separated from panel titles and suptitle)
@@ -142,9 +151,8 @@ def plot_pixel_density_comparison():
             transform=fig.transFigure
         )
 
-    fig.suptitle('Feature Density Comparison: Naive vs Intelligent Arrangement',
+    fig.suptitle('Non-zero Pixel Coverage: Naive vs Intelligent Arrangement',
                  fontsize=14, fontweight='bold', y=0.975)
-    return fig
     return fig
 
 
@@ -164,7 +172,7 @@ def main():
         print(f"  Saved: {path}")
 
     # Density comparison grid
-    print("  Generating density comparison...")
+    print("  Generating non-zero pixel coverage comparison...")
     fig = plot_pixel_density_comparison()
     path = 'results/figures/t2i_density_comparison.png'
     fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')

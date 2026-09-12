@@ -23,14 +23,22 @@ def train_and_evaluate(X_train, y_train, X_test, y_test, num_classes=2):
     cls_w = compute_class_weight('balanced', classes=classes, y=y_train)
     sample_weight = cls_w[np.searchsorted(classes, y_train)]
 
+    # C16: `use_label_encoder` was deprecated in XGBoost 2.0 and REMOVED in 3.0
+    # (passing it there raises). The project pins only a lower bound, so make
+    # the call version-adaptive instead of hard-coding a removed argument.
+    import xgboost
+    xgb_kwargs = {}
+    if int(xgboost.__version__.split('.')[0]) < 2:
+        xgb_kwargs['use_label_encoder'] = False
+
     model = XGBClassifier(
         n_estimators=100,
         max_depth=6,
         learning_rate=0.1,
         random_state=42,
-        use_label_encoder=False,
         eval_metric='mlogloss',
         verbosity=0,
+        **xgb_kwargs,
     )
     model.fit(X_train, y_train, sample_weight=sample_weight)
 

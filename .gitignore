@@ -43,3 +43,18 @@ results/
 *.log
 wandb/
 runs/
+
+# Result archives (hundreds of MB; see Plan/final-writeup-plan.md 3.1)
+# Keep them out of git — results/*.json is the tracked, reviewable form.
+results.zip
+results*.zip
+
+# Systematic-literature-review working directory (downloaded exports;
+# *.pdf is already ignored above). Not part of the seminar code+results repo.
+SLR/
+
+# Local agent/tooling state
+.freebuff/
+
+# Scratch figure-label notes (working aid, not a deliverable)
+_figure_preview.html

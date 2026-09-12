@@ -1135,7 +1135,13 @@ def plot_ablation_results(output_dir='results/figures'):
 
 def plot_density_vs_performance(results, output_dir='results/figures'):
 
-    """Scatter: feature density (x) vs F1 (y), colored by method."""
+    """Grouped bars: F1 per T2I method x architecture, one panel per dataset.
+
+    C10: this is NOT a density-vs-F1 plot. The x axis is the T2I method; each
+    dataset's feature density is constant and is only annotated in the panel
+    title. The y label is the honest per-dataset F1 (F1_LABEL), because the
+    binary datasets store positive-class F1 rather than a macro average (C6).
+    """
 
     output_path = Path(output_dir)
 
@@ -1223,7 +1229,9 @@ def plot_density_vs_performance(results, output_dir='results/figures'):
         ax.set_xticks(x)
         ax.set_xticklabels([T2I_LABELS[m] for m in method_order], fontsize=9)
         ax.set_xlabel('T2I Method', fontsize=10)
-        ax.set_ylabel('Macro-F1 (%)', fontsize=10)
+        # C6: use the honest per-dataset F1 label. 'Macro-F1' is only true for
+        # the 7-class dry_bean; the binary datasets store positive-class F1.
+        ax.set_ylabel(F1_LABEL[dataset], fontsize=10)
         ax.set_title('{} — density {:.1f}%'.format(
             DATASET_LABELS[dataset].splitlines()[0], density),
             fontsize=11, fontweight='bold')
@@ -1243,7 +1251,11 @@ def plot_density_vs_performance(results, output_dir='results/figures'):
                             ha='center', va='bottom', fontsize=7.5, color='#333333')
 
 
-    fig.suptitle('Feature Density vs Classification Performance (per dataset)',
+    # C10: the x axis is the T2I method, not density — density is constant
+    # within a dataset and is only annotated in each panel title. Title the
+    # figure for what it actually plots.
+    fig.suptitle('Classification Performance by T2I Method and Architecture\n'
+                 '(per-dataset feature density annotated in panel titles)',
 
                  fontsize=13, fontweight='bold', y=1.02)
 

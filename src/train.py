@@ -6,6 +6,15 @@ Usage:
     python src/train.py --full          # Full training
 """
 
+# NOTE (audit C20) — helpers below that are NOT part of the final protocol and
+# are not called anywhere in the pipeline:
+#   - save_checkpoint / load_checkpoint: run_all.py persists state_dicts itself.
+#   - zscore_normalize: superseded by imagenet_normalize for the pretrained
+#     models; the T2I wrappers handle their own scaling.
+#   - cross_validate: the study uses a single stratified 70/10/20 split (stated
+#     limitation); kept as a utility, not as a reported method.
+# Do not cite these as part of the method.
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset

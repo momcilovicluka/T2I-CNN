@@ -8,8 +8,8 @@ Also reports: accuracy, precision, recall, ROC-AUC, PR-AUC, confusion matrix.
 import numpy as np
 import torch
 from sklearn.metrics import (
-    accuracy_score, precision_score, recall_score, f1_score,
-    roc_auc_score, average_precision_score, confusion_matrix,
+    accuracy_score, balanced_accuracy_score, precision_score, recall_score,
+    f1_score, roc_auc_score, average_precision_score, confusion_matrix,
     classification_report, roc_curve, precision_recall_curve
 )
 
@@ -77,6 +77,16 @@ def _compute_metrics(y_true, y_pred, y_probs, num_classes):
     results['precision_macro'] = precision_score(y_true, y_pred, average=avg, zero_division=0)
     results['recall_macro'] = recall_score(y_true, y_pred, average=avg, zero_division=0)
     results['f1_macro'] = f1_score(y_true, y_pred, average=avg, zero_division=0)
+
+    # Audit C6: for num_classes == 2 the three keys above hold scikit's BINARY
+    # positive-class values (benign for breast, >50K for adult), which are NOT
+    # comparable across datasets. Record the symmetric macro-F1 over all
+    # classes and the balanced accuracy alongside them, so consumers can report
+    # a cross-dataset-comparable number without re-running. For dry_bean
+    # f1_macro_all equals the existing f1_macro (already macro over 7 classes).
+    results['f1_macro_all'] = f1_score(y_true, y_pred, average='macro',
+                                       zero_division=0)
+    results['balanced_accuracy'] = balanced_accuracy_score(y_true, y_pred)
 
     # ROC-AUC and PR-AUC (need probabilities)
     if y_probs is not None and y_probs.ndim == 2:

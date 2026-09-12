@@ -24,6 +24,33 @@ from torch.utils.data import DataLoader, TensorDataset
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
+def _json_default(obj):
+    """JSON fallback for numpy scalars/arrays (mirrors run_all.py)."""
+    if isinstance(obj, (np.integer,)):
+        return int(obj)
+    if isinstance(obj, (np.floating,)):
+        return float(obj)
+    if isinstance(obj, np.ndarray):
+        return obj.tolist()
+    raise TypeError(f'Object of type {type(obj).__name__} is not JSON serializable')
+
+
+def _write_json_atomic(path, obj):
+    """Write JSON via temp file + os.replace.
+
+    Audit C19: the three ablation outputs used plain open(...,'w'), so a kill
+    mid-write left a truncated JSON behind. run_all.py already cleans up
+    `results/*.json.tmp` on startup, so the temp name matches its pattern.
+    """
+    import os
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + '.tmp')
+    with open(tmp, 'w') as f:
+        json.dump(obj, f, indent=2, default=_json_default)
+    os.replace(str(tmp), str(path))
+
+
 # ============================================================
 # ABLATION 1: Pixel Shuffling
 # ============================================================
@@ -181,8 +208,8 @@ def run_pixel_shuffling_ablation(dataset, t2i_method, cnn_arch, output_dir='resu
     # Save
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
-    with open(output_path / f'ablation_pixel_shuffling_{dataset}_{t2i_method}.json', 'w') as f:
-        json.dump(result, f, indent=2)
+    _write_json_atomic(
+        output_path / f'ablation_pixel_shuffling_{dataset}_{t2i_method}.json', result)
 
     return result
 
@@ -334,8 +361,8 @@ def run_feature_ordering_ablation(dataset, t2i_method, cnn_arch, output_dir='res
     }
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
-    with open(output_path / f'ablation_feature_ordering_{dataset}_{t2i_method}.json', 'w') as f:
-        json.dump(output, f, indent=2)
+    _write_json_atomic(
+        output_path / f'ablation_feature_ordering_{dataset}_{t2i_method}.json', output)
 
     print(f"\n  Best: {output['best_ordering']}, Worst: {output['worst_ordering']}")
     return output
@@ -470,8 +497,8 @@ def run_lpft_ablation(dataset, t2i_method, output_dir='results'):
 
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
-    with open(output_path / f'ablation_lpft_{dataset}_{t2i_method}.json', 'w') as f:
-        json.dump(output, f, indent=2)
+    _write_json_atomic(
+        output_path / f'ablation_lpft_{dataset}_{t2i_method}.json', output)
 
     return output
 

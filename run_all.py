@@ -70,64 +70,13 @@ ARCH_LR = {
 }
 
 
-class ProgressTracker:
-    """Track experiment progress with ETA and resume support."""
+# NOTE (audit C13/C20): a `ProgressTracker` class used to be defined here. It was
+# never instantiated anywhere in the project, and its `end_experiment` method
+# referenced `datetime`/`timedelta` without importing them, so it could never
+# have run. The inline `[i/N] ... — SKIP (done)` / `ERROR` prints inside
+# `main()` already cover progress and resume reporting, so the dead class was
+# removed instead of repaired. Do not cite it in the write-up.
 
-    def __init__(self, total, label="experiments"):
-        self.total = total
-        self.completed = 0
-        self.failed = 0
-        self.label = label
-        self.start_time = time.time()
-        self.times = []
-
-    def start_experiment(self, idx, name):
-        self.current_name = name
-        self.current_start = time.time()
-        elapsed = time.time() - self.start_time
-        sep = "=" * 60
-        print(f"\n{sep}")
-        print(f"[{idx}/{self.total}] {name}")
-        print(f"  Elapsed: {self._fmt_time(elapsed)}", end="")
-
-    def end_experiment(self, success=True, f1=None):
-        elapsed_exp = time.time() - self.current_start
-        self.times.append(elapsed_exp)
-
-        if success:
-            self.completed += 1
-            avg_time = sum(self.times) / len(self.times)
-            remaining = (self.total - self.completed - self.failed) * avg_time
-            eta = datetime.now() + timedelta(seconds=remaining)
-            f1_str = f" | F1={f1:.4f}" if f1 else ""
-            eta_str = eta.strftime("%H:%M")
-            print(f"{f1_str} | Done in {elapsed_exp:.0f}s | ETA: {self._fmt_time(remaining)} ({eta_str})")
-        else:
-            self.failed += 1
-            print(f" | FAILED after {elapsed_exp:.0f}s")
-
-        pct = self.completed / self.total * 100 if self.total > 0 else 0
-        print(f"  Progress: {self.completed}/{self.total} done, {self.failed} failed ({pct:.0f}%)")
-
-    def summary(self):
-        elapsed = time.time() - self.start_time
-        sep = "=" * 60
-        print(f"\n{sep}")
-        print(f"SUMMARY: {self.completed}/{self.total} completed, {self.failed} failed")
-        print(f"Total time: {self._fmt_time(elapsed)}")
-        if self.times:
-            print(f"Avg per experiment: {sum(self.times)/len(self.times):.0f}s")
-
-    def _fmt_time(self, seconds):
-        if seconds < 60:
-            return f"{seconds:.0f}s"
-        if seconds < 3600:
-            m = int(seconds // 60)
-            s = int(seconds % 60)
-            return f"{m}m {s}s"
-        h = int(seconds // 3600)
-        m = int((seconds % 3600) // 60)
-        return f"{h}h {m}m"
 
 def create_cnn_model(arch, num_classes):
     """Initialize a CNN model by architecture name.
@@ -418,7 +367,12 @@ def aggregate_results(output_dir='results'):
     df = pd.DataFrame(all_results)
 
     # Select key columns for the summary CSV
+    # C6: `f1_macro_all` + `balanced_accuracy` are cross-dataset-comparable
+    # (macro over ALL classes). The legacy `f1_macro` key is kept for
+    # backwards compatibility but holds scikit 'binary' positive-class F1 on
+    # breast_cancer/adult_income and true macro-F1 only on dry_bean.
     key_cols = ['dataset', 't2i_method', 'cnn_arch', 'accuracy', 'f1_macro',
+                'f1_macro_all', 'balanced_accuracy',
                 'precision_macro', 'recall_macro', 'roc_auc', 'pr_auc',
                 'train_time_sec', 'epochs_trained', 'train_samples', 'test_samples']
     key_cols = [c for c in key_cols if c in df.columns]
@@ -427,15 +381,35 @@ def aggregate_results(output_dir='results'):
     df[key_cols].to_csv(csv_path, index=False, float_format='%.4f')
     print(f"\nAggregated {len(df)} results -> {csv_path}")
 
-    # Print summary table
-    print("\n=== Summary: Macro-F1 (%) by T2I Method and Architecture ===\n")
+    # Print summary table.
+    #
+    # C6: the stored `f1_macro` column is NOT one comparable metric — for the
+    # two binary datasets it is scikit's BINARY positive-class F1, and only for
+    # dry_bean is it a true macro average. Print both columns, explicitly
+    # labelled, so this console output cannot be mis-transcribed into the
+    # write-up as a single cross-dataset comparison.
+    print("\n=== Summary: F1 (%) by T2I Method and Architecture ===\n")
+    print("NOTE: 'f1_positive_class' = positive-class F1 for the binary")
+    print("      datasets breast_cancer (benign) / adult_income (>50K), and")
+    print("      macro-F1 for the 7-class dry_bean (legacy key: f1_macro).")
+    print("      'f1_macro_all' = macro-F1 over ALL classes — the only")
+    print("      cross-dataset-comparable number.\n")
     if 't2i_method' in df.columns and 'cnn_arch' in df.columns:
-        pivot = df.pivot_table(
-            index=['dataset', 't2i_method'],
-            columns='cnn_arch',
-            values='f1_macro',
-        )
-        print((pivot * 100).round(2).to_string())
+        for value_col, title in (('f1_macro', 'f1_positive_class / macro (stored: f1_macro)'),
+                                 ('f1_macro_all', 'f1_macro_all (comparable)'),
+                                 ('balanced_accuracy', 'balanced accuracy')):
+            if value_col not in df.columns or df[value_col].isna().all():
+                print(f"--- {title} --- (not present; run "
+                      f"scripts/backfill_metrics.py --write)\n")
+                continue
+            pivot = df.pivot_table(
+                index=['dataset', 't2i_method'],
+                columns='cnn_arch',
+                values=value_col,
+            )
+            print(f"--- {title} ---")
+            print((pivot * 100).round(2).to_string())
+            print()
 
     return df
 

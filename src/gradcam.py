@@ -72,7 +72,19 @@ def generate_gradcam(model, image, target_class, arch, device='cpu'):
 
     orig_h, orig_w = image_tensor.shape[2], image_tensor.shape[3]
 
-    grayscale_cam = cam(input_tensor=image_tensor, targets=None)
+    # Audit C15: target_class was previously ignored (targets=None always
+    # explained the model's own top-1 class). Use it when the helper exists and
+    # fall back to the previous behaviour otherwise, so a missing
+    # ClassifierOutputTarget in an older pytorch-grad-cam cannot break the run.
+    targets = None
+    if target_class is not None:
+        try:
+            from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
+            targets = [ClassifierOutputTarget(int(target_class))]
+        except Exception:
+            targets = None
+
+    grayscale_cam = cam(input_tensor=image_tensor, targets=targets)
     heatmap = grayscale_cam[0]
 
     # Downscale back to original size if needed
@@ -100,7 +112,7 @@ def overlay_heatmap(image, heatmap, alpha=0.5):
     Returns:
         overlay: np.ndarray of shape (H, W, 3) — RGB image with heatmap
     """
-    import matplotlib.cm as cm
+    import matplotlib
 
     # Convert grayscale to RGB
     if image.ndim == 2:
@@ -111,7 +123,9 @@ def overlay_heatmap(image, heatmap, alpha=0.5):
         image_rgb = image.copy()
 
     # Apply colormap to heatmap
-    colormap = cm.get_cmap('jet')
+    # Audit C16: matplotlib.colormaps replaces the deprecated cm.get_cmap
+    # (removed in matplotlib >= 3.9).
+    colormap = matplotlib.colormaps['jet']
     heatmap_colored = colormap(heatmap)[:, :, :3]  # Drop alpha channel
 
     # Blend
