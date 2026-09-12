@@ -139,6 +139,10 @@ def main():
             with open(tmp_file, 'w') as f:
                 json.dump(data, f, indent=2)
             os.replace(str(tmp_file), str(json_file))
+            # Durability: mirror the rewritten file, so the backfilled metrics
+            # survive a lost session like every other result (src/colab_sync.py).
+            from src.colab_sync import sync_path
+            sync_path(json_file)
 
     print(f'\nScanned {len(json_files)} JSON files in {results_dir}')
     print(f'  result dicts with a confusion matrix: {counters["annotated"]}'

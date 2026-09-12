@@ -450,6 +450,8 @@ def aggregate_results(output_dir='results'):
 
     csv_path = results_dir / 'all_experiments.csv'
     df[key_cols].to_csv(csv_path, index=False, float_format='%.4f')
+    from src.colab_sync import sync_path
+    sync_path(csv_path)
     print(f"\nAggregated {len(df)} results -> {csv_path}")
 
     # Print summary table.
@@ -548,6 +550,9 @@ def main():
 
     if args.aggregate:
         aggregate_results(output_dir=str(results_dir))
+        # Mirror the whole tree: the backfilled per-cell JSONs are only copied
+        # here, since the aggregate path returns before the closing sync pass.
+        print(f"[sync] mirrored {sync_tree(results_dir)} file(s) from {results_dir}/") 
         return
 
     run_baselines = not args.cnn_only
