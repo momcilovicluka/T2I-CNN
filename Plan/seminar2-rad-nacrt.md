@@ -598,8 +598,17 @@ razlika CNN vs baselajn (ograničenje, odeljak 7).
 ## 4.6 Evaluacija i protokol validacije
 
 Evaluacija se vrši na **jednom fiksiranom, stratifikovanom test skupu**
-(10% svakog skupa), uz napomenu da se varijansa usled izbora podele ne meri
-(nema unakrsne validacije — ograničenje). Za svaki eksperiment prijavljuju se:
+(10% svakog skupa). Glavna serija je izvedena jednom po ćeliji, pa se za nju
+varijansa usled izbora podele ne meri (nema unakrsne validacije — ograničenje).
+Da to ograničenje ne bi ostalo neadresirano, ćelije koje nose tvrdnje ponovljene
+su kroz **pet semena (42–46)** pomoću `scripts/seed_sweep.py`, koji koristi isti
+put treninga kao glavna serija i čuva rezultate odvojeno (`results/seeds/`),
+tako da se brojevi iz glavne tabele ne menjaju. Varijansa se prijavljuje kao
+srednja vrednost ± standardna devijacija; tamo gde interval prekriva nulu,
+razlika se **ne** navodi kao nalaz nego kao nerazlučiva od šuma.
+[UNETI IZ `results/seed_summary.csv` POSLE POKRETANJA]
+
+Za svaki eksperiment prijavljuju se:
 Accuracy, Precision, Recall, F1 (sa terminologijom iz 3.5), ROC-AUC, PR-AUC,
 matrica konfuzije i vreme treninga. Primarna metrika za rangiranje je F1.
 
@@ -1205,7 +1214,9 @@ podešavanje — bez nje transfer učenje na T2I slikama jednostavno ne radi.
 
 # 6. Rezultati
 > Svi brojevi u ovom poglavlju potiču iz **finalne serije eksperimenata** (`run_all.py`: 36 CNN + 9
-> baselajna ćelija; jedna verzija koda na jednoj mašini, deterministički seed 42; rezime u `results/all_experiments.csv`).
+> baselajna ćelija; jedna verzija koda na jednoj mašini, seed 42 kao osnovni; rezime u `results/all_experiments.csv`).
+> Ćelije koje nose tvrdnje dodatno su ponovljene kroz semena 42–46 (§4.6, `results/seed_summary.csv`), jer
+> jedan run sam po sebi ne daje meru nesigurnosti.
 > Obuhvaćeni su rezultati nakon svih ispravki protokola (TINTO rescale na [0,1], klipovanje po skupu, balansirane težine
 > baselajna, jedinstvena vremena `total_time_sec`; vidi PART 9g/12a/13b). Za binarne skupove F1 je **F1 pozitivne
 > klase** (breast: *benign*; adult: `>50K`), za Dry Bean **makro-F1** (§3.5). Razlike manje od ~1 pp uz jednu podelu
@@ -1279,7 +1290,7 @@ Binarni disbalansiran skup (~75:25, 31654 trening / 9045 test); pozitivna klasa 
 
 Baselajni (F1/tačnost): RF 67,84 (85,52), XGBoost 71,43 (82,94), MLP 68,51 (81,19) (RF ima najvišu tačnost, 85,52 %).
 
-**Glavni nalaz — negativan transfer na naivnim slikama.** Pretrenirani ResNet-18 nad naivnim redoslednim slikama postiže F1 57,58 % i tačnost 64,70 % — ispod verovatnoće većinske klase (75,2 %). Ista arhitektura od nule (1-kanalni sirovi ulaz) dostiže 68,98 % / 81,05 %, pa razlika iznosi -11,40 pp u F1, odnosno -16,35 pp u tačnosti, uz rano zaustavljanje već u 17. epohi. Ovaj nalaz nije artefakt slučajnosti (deterministički seed 42) i dalje se analizira u §6.3; u pozadini je kombinovani efekat pretreniranosti i 3-kanalnog ImageNet normalizovanog ulaza na slikama bez prostorne grupisanosti (napomena u §3.3).
+**Glavni nalaz — negativan transfer na naivnim slikama.** Pretrenirani ResNet-18 nad naivnim redoslednim slikama postiže F1 57,58 % i tačnost 64,70 % — ispod verovatnoće većinske klase (75,2 %). Ista arhitektura od nule (1-kanalni sirovi ulaz) dostiže 68,98 % / 81,05 %, pa razlika iznosi -11,40 pp u F1, odnosno -16,35 pp u tačnosti, uz rano zaustavljanje već u 17. epohi. Ovaj nalaz je ponovljen kroz pet semena (42–46; §4.6) da se proveri da nije posledica jedne srećne rane faze zaustavljanja: F1 pozitivne klase 57,58 % pojedinačno, odnosno __ ± __ % kroz semena (balansirana tačnost __ ± __ %), a ista arhitektura od nule __ ± __ % — [UNETI IZ `results/seed_summary.csv` POSLE POKRETANJA]. U pozadini je kombinovani efekat pretreniranosti i 3-kanalnog ImageNet normalizovanog ulaza na slikama bez prostorne grupisanosti (napomena u §3.3); odvojen doprinos samog ulaza proveren je kontrolom `--scratch-3ch` (§4.7), koja arhitekturi od nule daje isti 3-kanalni normalizovani ulaz, tako da jedina razlika ostaje inicijalizacija težina.
 
 - Bez pretreniranosti, naivne slike predstavljaju najbolju metodu na Adult (shallow 68,94 %, od nule 68,98 %), dok TINTO i DeepInsight zaostaju (67,03 / 66,32 % od nule) — konzistentno sa kolizijama atributa iz §6.4; IGTD je između (68,45 % od nule). Efekat metode (~2–3 pp) manji je od efekta arhitekture/pretreniranosti (do ~11 pp).
 
@@ -1427,8 +1438,11 @@ DeepInsight **nerezultativna** (potvrđuje invarijantnost, ne razliku među
 porecima). Prethodna tvrdnja da sortiranje po korelaciji „zaista menja raspored“
 bila je artefakt: permutacija se ranije računala zasebno po skupu, pa su
 vrednosti test skupa završavale na koordinatama naučenim iz trening skupa
-(2,34 % pogrešnih piksela na Breast). Za prikaz stvarnog efekta redosleda
-pokrenuti istu ablaciju sa `--t2i naive` (naivni raspored nije invarijantan).
+(2,34 % pogrešnih piksela na Breast). Za prikaz stvarnog efekta redosleda pokrenuta je ista ablacija i sa `--t2i naive`
+(naivni raspored nije invarijantan), pa slika ima dva panela: na DeepInsight-u se
+četiri poretka poklapaju, a na naive se razdvajaju.
+[UNETI IZ JSON-a POSLE POKRETANJA: naive F1 po poretku (original/random/correlation/reversed)
+po skupu; očekivano razdvajanje, jer permutacija kolona menja sliku]
 
 **LP-FT (Slika 6.4, `ch4_ablation_lpft.png`).** Poređenje direktnog finog
 podešavanja pretreniranog ResNet-18 sa LP-FT (linearno sondiranje zamrznutog

@@ -168,6 +168,84 @@ If the Phase-1 ablation re-runs are done in the same session, run steps 1–3
 
 ---
 
+## Phase 3 implementation status (2026-09-12)
+
+Phase 3 is the optional hardening layer: seed repeats (C7/C8), the rigorous
+pretrained-vs-scratch control (C11) and the naive ordering add-on (C1). **None
+of it repairs a defect** — C7/C8/C11 are already written down as limitations.
+What it buys is turning those limitations into measurements.
+
+| Item | Change made | State | Still required |
+|------|-------------|-------|----------------|
+| C7/C8 | New `scripts/seed_sweep.py`. It repeats the 7 claim-bearing cells over seeds 42–46 by calling the **same** `run_all.run_single_experiment`, so the training path is provably identical and nothing is duplicated; results go to `results/seeds/seed<N>/` so the recorded seed-42 grid is never touched; it prints mean ± sample sd per cell plus a delta ± 2 se verdict for each *claimed difference*, and writes `results/seed_summary.csv`. `run_single_experiment` gained `seed` and `split_seed`; `run_all.py` gained `--seed`, `--split-seed`, `--output-dir`. Defaults remain 42, so the recorded grid reproduces exactly; every JSON now records `seed`/`split_seed`. | done | Run the sweep in Colab; fill the `[UNETI ...]` placeholders |
+| C7 (`cross_validate`) | Decision: **keep, explicitly marked**. The train.py header note now states the variance requirement it was written for is served by `seed_sweep.py`. Wiring it into a `--cv` path would duplicate what the sweep already does via the identical training path, and it retrains 5 folds per cell. | done | — |
+| C11 | `run_all.py` gained the `SCRATCH_3CH` flag + `--scratch-3ch`. With it on, `resnet_scratch` is built with `input_channels=3` (conv1 architecture-identical to the pretrained arm) plus `force_imagenet_norm`. Normalisation is now decided by **one** predicate, `src/train.uses_imagenet_normalization()`, shared by `train_model`, `evaluate_model` and `generate_gradcam` — previously three independent `getattr(model, 'pretrained', False)` checks that could silently disagree, which is exactly the failure mode that would have made the control arm look fine while scoring un-normalised test images. | done | Back up the 12 `resnet_scratch` JSONs, then re-run those 12 cells with the flag |
+| C1 add-on | `src/visualize.py`: the feature-ordering figure now keys on `(dataset, method)` and draws one panel per method, so the naive run appears beside DeepInsight. This also fixed a **latent bug**: the old `by_ds = {r['dataset']: r}` silently dropped one method once two existed, so the naive control would have overwritten the DeepInsight bars in the figure. The footnote is conditional on which panels are present. | done | Run `--t2i naive`; regenerate the figure |
+
+Verification performed locally (no training): `py_compile` on all touched files;
+model construction checked — default `resnet_scratch` = 1ch/no-norm (unchanged),
+flag on = 3ch + ImageNet norm with `pretrained=False`, `resnet` and `shallow`
+unchanged; `run_all.py --dry-run` with and without the flag; `seed_sweep.py
+--dry-run`; and both the one-panel and two-panel paths of the ordering figure
+rendered against synthetic ablation data into a temp directory.
+
+### Measured time budget
+
+Aggregated from the `train_time_sec` / `t2i_time_sec` fields of the 45 saved
+result JSONs (CPU; the ablations store no timings, so their rows are
+extrapolated from the matching main-grid cell):
+
+| scope | time |
+|---|---|
+| main grid, 45 cells (training only) | 12,955 s = **3.60 h** |
+| — of which adult_income | 9,529 s = 159 min (74 %) |
+| — of which the two ResNet variants | 11,939 s = 199 min (92 %) |
+| — of which breast_cancer (9 CNN cells) | 120 s = 2 min |
+| T2I generation, all cells | ~582 s = ~10 min |
+| **Phase 1** ablations (feature-ordering ×3, pixel-shuffling ×3, LP-FT ×3) | **≈ 80 min** (LP-FT alone ≈ 52 min) |
+| **Phase 2** (backfill + aggregate) | seconds |
+| **Phase 2** figures (4 scripts) | ≈ 15–30 min, zero training |
+| **Phase 3** C1 naive ordering | ≈ 15 min |
+| **Phase 3** C7/C8 seed sweep (7 cells × 4 extra seeds) | ≈ 2.2 h |
+| **Phase 3** C11 control (12 cells) | ≈ 1.8 h |
+
+This **supersedes the earlier 2.5–3.5 h estimate for Phase 1**, which was
+guessed rather than derived. Fresh full run with everything on: ≈ 9.5–10 h CPU;
+resuming from the existing grid, ≈ 6 h. On a Colab GPU the ResNet-dominated items
+(seed sweep, C11) drop by roughly an order of magnitude, which is the difference
+between Phase 3 being a day and being an hour.
+
+### Colab sequence for Phase 3
+
+```bash
+# C1 add-on — the positive counterpart to the invariance result (~15 min)
+for ds in breast_cancer dry_bean adult_income; do
+  python src/ablation.py --dataset $ds --t2i naive --feature-order
+done
+
+# C7/C8 — error bars on the cells that carry a claim (~2.2 h CPU)
+python scripts/seed_sweep.py --dry-run        # confirm plan and cost first
+python scripts/seed_sweep.py                  # 7 cells x seeds 42-46
+# cheaper: just the headline trio
+python scripts/seed_sweep.py \
+  --cells adult_income/naive/resnet,adult_income/naive/resnet_scratch,adult_income/naive/shallow
+
+# C11 — the rigorous controlled comparison, ONLY if the confound is challenged (~1.8 h CPU)
+mkdir -p results/backup_scratch_1ch
+mv results/*resnet_scratch* results/backup_scratch_1ch/   # keep the 1-channel arms
+python run_all.py --archs resnet_scratch --scratch-3ch
+
+# aggregate and regenerate figures LAST, so they pick up the new files
+python run_all.py --aggregate
+python src/visualize.py --ablation-only
+python src/visualize_t2i.py
+```
+
+`--seed` / `--split-seed` default to 42, so nothing above changes the recorded
+grid unless a flag is passed. `seed_sweep.py` never writes into `results/*.json`.
+
+---
+
 ## C1 — CRITICAL: the feature-ordering ablation is invalid (per-split permutation)
 
 **Where.** `src/ablation.py:172` (`reorder_features`, `order == 'correlation'`),
