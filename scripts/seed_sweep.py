@@ -128,6 +128,9 @@ def main():
 
     import run_all
     from run_all import DATASET_CONFIG, run_single_experiment, _experiment_is_done
+    from src.colab_sync import describe, sync_path
+
+    print(describe())
 
     # Validate early: a typo here would otherwise fail after the first training.
     for dataset, t2i, arch in cells:
@@ -168,23 +171,19 @@ def main():
             else:
                 print(f'\n{"=" * 70}\n  [seed {seed}] {key}\n{"=" * 70}')
                 try:
+                    # save_weights=False: a sweep keeps only numbers, and 35
+                    # ResNet state_dicts would be ~1.5 GB written (and mirrored
+                    # to Drive) for nothing.
                     run_single_experiment(dataset, t2i, arch,
                                           output_dir=str(out_dir),
                                           seed=seed,
-                                          split_seed=args.split_seed)
+                                          split_seed=args.split_seed,
+                                          save_weights=False)
                 except Exception as exc:  # keep the sweep going
                     print(f'  ERROR on {key} @ seed {seed}: {exc}')
                     import traceback
                     traceback.print_exc()
                     continue
-
-                # run_single_experiment always persists the weights for the
-                # Grad-CAM figures. A sweep keeps only numbers, and 35 ResNet
-                # state_dicts is ~1.5 GB, so drop them (the sweep is about F1,
-                # not saliency).
-                weights = out_dir / f'{dataset}_{t2i}_{arch}_model.pt'
-                if weights.exists():
-                    weights.unlink()
 
             with open(result_file) as f:
                 rows[(key, seed)] = json.load(f)
@@ -247,6 +246,7 @@ def main():
                                  f"{st['mean']:.6f}",
                                  f"{st['std']:.6f}" if st['std'] == st['std'] else '',
                                  f"{st['min']:.6f}", f"{st['max']:.6f}"])
+    sync_path(csv_path)
     print(f'\nWrote {csv_path}')
     print('Report the mean ± std (and the per-seed values) in the tables; quote the')
     print('UNRESOLVED rows as "not distinguishable from noise" rather than as findings.')

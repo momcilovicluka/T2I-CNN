@@ -49,6 +49,37 @@ def _write_json_atomic(path, obj):
     with open(tmp, 'w') as f:
         json.dump(obj, f, indent=2, default=_json_default)
     os.replace(str(tmp), str(path))
+    # Durability: mirror the finished file immediately, so an interrupted Colab
+    # session loses at most the ablation in flight (see src/colab_sync.py).
+    from src.colab_sync import sync_path
+    sync_path(path)
+
+
+# Keys that only exist in outputs written by the CURRENT code. Used by the
+# resume check below: a file from before the C1/C3/C4 fixes lacks them, so it is
+# correctly re-run instead of being trusted as complete.
+ABLATION_MARKERS = {
+    'pixel_shuffling': ('shuffled_train_f1', 'retrain_drop', 'arm_legend'),
+    'feature_ordering': ('correlation_perm', 'ordering_note'),
+    'lpft': ('seed', 'arm_note', 'direct_ft_config'),
+}
+
+
+def _ablation_is_current(path, kind):
+    """True when an existing ablation JSON was produced by the current code.
+
+    Resume-by-default (matching run_all.py) makes a crashed or timed-out run
+    cheap to restart: completed ablations are skipped, and only the missing or
+    stale ones are recomputed. Pass --force to recompute regardless.
+    """
+    if not path.exists():
+        return False
+    try:
+        with open(path) as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return False
+    return all(k in data for k in ABLATION_MARKERS[kind])
 
 
 # ============================================================
@@ -523,22 +554,43 @@ def main():
                         help='Run feature ordering ablation only')
     parser.add_argument('--lpft', action='store_true',
                         help='Run LP-FT comparison only')
+    parser.add_argument('--force', action='store_true',
+                        help='Recompute even if an up-to-date result already '
+                             'exists (default: resume and skip those)')
     args = parser.parse_args()
 
+    from src.colab_sync import describe
+    print(describe())
+
     run_any = args.all or args.pixel_shuffle or args.feature_order or args.lpft
-
-    if args.all or args.pixel_shuffle:
-        run_pixel_shuffling_ablation(args.dataset, args.t2i, args.cnn)
-
-    if args.all or args.feature_order:
-        run_feature_ordering_ablation(args.dataset, args.t2i, args.cnn)
-
-    if args.all or args.lpft:
-        run_lpft_ablation(args.dataset, args.t2i)
-
     if not run_any:
         print("Specify --all, --pixel-shuffle, --feature-order, or --lpft")
         parser.print_help()
+        return
+
+    def pending(kind, filename):
+        """Whether this ablation still needs to run."""
+        path = Path('results') / filename
+        if args.force:
+            return True
+        if _ablation_is_current(path, kind):
+            print(f"  {filename} — SKIP (already up to date; use --force to redo)")
+            return False
+        return True
+
+    if args.all or args.pixel_shuffle:
+        if pending('pixel_shuffling',
+                   f'ablation_pixel_shuffling_{args.dataset}_{args.t2i}.json'):
+            run_pixel_shuffling_ablation(args.dataset, args.t2i, args.cnn)
+
+    if args.all or args.feature_order:
+        if pending('feature_ordering',
+                   f'ablation_feature_ordering_{args.dataset}_{args.t2i}.json'):
+            run_feature_ordering_ablation(args.dataset, args.t2i, args.cnn)
+
+    if args.all or args.lpft:
+        if pending('lpft', f'ablation_lpft_{args.dataset}_{args.t2i}.json'):
+            run_lpft_ablation(args.dataset, args.t2i)
 
 
 if __name__ == '__main__':

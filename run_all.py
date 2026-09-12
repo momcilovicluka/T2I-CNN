@@ -156,7 +156,7 @@ def _experiment_is_done(result_file):
 
 
 def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results',
-                          seed=42, split_seed=None):
+                          seed=42, split_seed=None, save_weights=True):
     """Run one CNN experiment: dataset -> T2I -> CNN -> evaluate.
 
     Args:
@@ -168,6 +168,13 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results',
             Pass 42 explicitly to hold the split fixed and isolate training
             noise only (audit C7). The default of 42 reproduces the recorded
             grid exactly.
+        save_weights: persist the state_dict (needed by the Grad-CAM figures).
+            Pass False for bulk sweeps — nothing consumes weights there, and a
+            ResNet sweep would otherwise write ~1.5 GB.
+
+    On completion the result JSON (and the weights, if saved) are mirrored to
+    $RESULTS_SYNC_DIR when that is set, so an interrupted Colab session loses at
+    most the one experiment in flight. See src/colab_sync.py.
 
     Returns: dict with all metrics and metadata.
     """
@@ -285,10 +292,13 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results',
     metrics['history'] = history
 
     # 11. Save model weights (needed for Grad-CAM visualization)
+    from src.colab_sync import sync_path
     output_path = Path(output_dir)
     output_path.mkdir(exist_ok=True)
     model_file = output_path / f"{dataset}_{t2i_method}_{cnn_arch}_model.pt"
-    torch.save(model.state_dict(), model_file)
+    if save_weights:
+        torch.save(model.state_dict(), model_file)
+        sync_path(model_file)   # durability: retraining a cell is the costly part
 
     # 12. Save results (atomic write)
     # FIX (audit): Was a direct open(result_file, 'w') — a kill mid-write
@@ -315,6 +325,7 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results',
     with open(tmp_file, 'w') as f:
         json.dump(metrics, f, indent=2, default=to_serializable)
     os.replace(str(tmp_file), str(result_file))
+    sync_path(result_file)   # crash-safe: this cell is now complete and durable
 
     print(f"  -> {result_file.name}: F1={metrics['f1_macro']:.4f}, "
           f"Acc={metrics['accuracy']:.4f} ({train_time:.0f}s)")
@@ -391,6 +402,8 @@ def run_baseline(dataset, model_type, output_dir='results'):
     with open(tmp_file, 'w') as f:
         json.dump(metrics, f, indent=2, default=to_serializable)
     os.replace(str(tmp_file), str(result_file))
+    from src.colab_sync import sync_path
+    sync_path(result_file)
 
     print(f"  -> {result_file.name}: F1={metrics['f1_macro']:.4f}, "
           f"Acc={metrics['accuracy']:.4f} ({train_time:.0f}s)")
@@ -476,6 +489,9 @@ def main():
     import argparse
 
     global SCRATCH_3CH
+
+    from src.colab_sync import describe, sync_tree
+    print(describe())
 
     parser = argparse.ArgumentParser(description='Run all experiments')
     parser.add_argument('--cnn-only', action='store_true',
@@ -615,6 +631,9 @@ def main():
     if not args.dry_run:
         print("\nAll experiments complete! Aggregating results...")
         aggregate_results(output_dir=str(results_dir))
+        # Final sweep of the whole tree: picks up the aggregate CSV, any figure
+        # and the weights of cells whose per-file mirror was skipped or failed.
+        print(f"[sync] mirrored {sync_tree(results_dir)} file(s) from {results_dir}/ in the closing pass")
 
 
 if __name__ == '__main__':
