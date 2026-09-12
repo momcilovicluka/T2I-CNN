@@ -476,6 +476,14 @@ interpretacija (vidi PART 13e priručnika).
 Dopunske metrike: ROC-AUC (površina ispod ROC krive; za višeklasne probleme
 makro one-vs-rest) i PR-AUC. Prikazuju se i matrice konfuzije i krive učenja.
 
+Uz navedene metrike, za svaku ćeliju se iz sačuvane matrice konfuzije izračunaju
+i beleže još dve: **makro-F1 preko svih klasa** (`f1_macro_all`) i
+**balansirana tačnost** (`balanced_accuracy`). One su jedine direktno uporedive
+između skupova (za razliku od F1 pozitivne klase, koja je većinska za Breast
+Cancer a manjinska za Adult Income) i nalaze se u `results/all_experiments.csv`;
+gde je za tvrdnju bitan prag, u tekstu se navodi i balansirana tačnost zajedno
+sa većinskom stopom skupa.
+
 ---
 
 # 4. Eksperimentalna postavka
@@ -1299,7 +1307,7 @@ Porede se `resnet` (pretrenirani, 3-kanalni ImageNet normalizovan ulaz) i `resne
 
 - **Breast Cancer i Dry Bean:** Δ ostaje u granicama ±1 pp (na Breast blago pozitivan za naive i DeepInsight), tj. pretreniranost niti pomaže niti škodi bitno kada slike nose dovoljno informacije.
 
-- **Adult Income + naivne slike:** Δ = −11,40 pp — jedini izražen negativan transfer (F1 57,58 % prema 68,98 %; tačnost 64,70 % prema 81,05 %; detalji u 6.1.3). Na ostalim metodama Adult daje Δ ≈ 0 (od −0,74 do +0,15 pp).
+- **Adult Income + naivne slike:** Δ = −11,40 pp — jedini izražen negativan transfer (F1 pozitivne klase 57,58 % prema 68,98 %; tačnost 64,70 % prema 81,05 %; detalji u 6.1.3). Na ostalim metodama Adult daje Δ ≈ 0 (od −0,74 do +0,15 pp). Uz makro-F1 preko svih klasa (§3.5, `f1_macro_all`) isti jaz iznosi −13,99 pp (63,68 % prema 77,67 %), a balansirana tačnost pretrenirane ćelije je 75,41 % — na nivou većinske klase (75,2 %). Zaključak o negativnom transferu se ne menja u smeru, samo u veličini, pa se u tabelama navodi koja je metrika u pitanju.
 
 - Interpretacija: pretrenirani filteri sa prirodnih slika ne donose sistematsku prednost na sintetičkim T2I slikama (§3.4); najveći negativan efekat javlja se tamo gde slika nema prostornu grupisanost (naivni redosledni raspored) i gde ulaz najviše odstupa od ImageNet domena.
 
@@ -1312,9 +1320,12 @@ Porede se `resnet` (pretrenirani, 3-kanalni ImageNet normalizovan ulaz) i `resne
 - Veza sa rezultatima (§6.1.3): na Adult Income TINTO i DeepInsight (najviše kolizija) postižu niži F1 od naive i IGTD na ShallowCNN i ResNet-18 od nule (66,32–67,03 % prema 68,45–68,98 %), što odgovara gubitku prostorne informacije usled kolizija — ali taj efekat (2–3 pp) ostaje manji od efekta arhitekture/pretreniranosti (do ~11 pp, §6.3). Na Breast Cancer i Dry Bean negativna korelacija (slični atributi blizu) ne povlači pad performansi: sve metode dostižu nivo baselajna (§6.2).
 
 - Gustina i preklapanje, dva nivoa: `t2i_density_comparison.png` je ilustrativna slika -
-  mreža primera po metodi i skupu (po jedan primer najčešće klase; gustina >0,01 ispisana
-  u naslovu panela); `ch4_density_vs_performance.png` je kvantitativna - udeo atributa po
-  pikselu (gustina) naspram F1 po ćeliji; `ch4_overlap_diagnostics.png` je kvantitativna -
+  mreža primera po metodi i skupu (po jedan primer najčešće klase; udeo piksela sa
+  vrednošću >0,01, tj. „non-zero pixels", ispisan ispod svakog panela — to NIJE gustina
+  atributa iz §3.2.6, već pokrivenost slike); `ch4_density_vs_performance.png` je
+  kvantitativna - prikazuje F1 po ćeliji (T2I metoda × arhitektura) za svaki skup, sa
+  gustinom atributa tog skupa anotiranom u naslovu panela (osa je T2I metoda, ne gustina);
+  `ch4_overlap_diagnostics.png` je kvantitativna -
   OF% (udeo atributa koji dele piksel s nekim drugim) i OP% (udeo piksela koje deli više
   atributa) po metodi i skupu (brojevi 78/104 i 70/104 iz §3.2.6 potiču upravo odavde).
 
@@ -1616,7 +1627,7 @@ ViT-Base/16 (nalaz o stopi učenja $10^{-4}$ iz §3.4 već je pripremljen).
 | Mešanje piksela (Slika 6.2) | `results/figures/ch4_ablation_pixel_shuffling.png` | 6.6 |
 | Raspored atributa (Slika 6.3) | `results/figures/ch4_ablation_feature_ordering.png` | 6.6 |
 | LP-FT (Slika 6.4) | `results/figures/ch4_ablation_lpft.png` | 6.6 |
-| Gustina vs performanse | `results/figures/ch4_density_vs_performance.png` | 6.4 |
+| Performanse po metodi i arhitekturi (gustina anotirana u naslovu panela) | `results/figures/ch4_density_vs_performance.png` | 6.4 |
 | ROC krive | `results/figures/ch4_roc_curves.png` | 6.1 |
 | Vreme treninga | `results/figures/ch4_runtime_comparison.png` | 6.5 |
 | Raspodela klasa | `results/figures/ch3_class_distribution.png` | 4.1 |

@@ -86,6 +86,88 @@ show a real ordering effect.
 
 ---
 
+## Phase 2 implementation status (2026-09-12)
+
+Phase 2 (audit items C6, C10, C13–C21) is implemented in the working tree.
+**No code was executed.** Nothing here requires retraining — the only new file
+is `scripts/backfill_metrics.py`, a post-processing script over existing JSONs.
+
+| Item | Change made | State | Still required |
+|------|-------------|-------|----------------|
+| C6 (metrics) | `src/evaluate.py`: new runs also record `f1_macro_all` (macro over ALL classes) and `balanced_accuracy`; the legacy `f1_macro` key is untouched. New `scripts/backfill_metrics.py` recomputes the same two keys for the 45 already-saved result dicts that carry a `confusion_matrix` (the 9 ablation JSONs store only `f1`/`accuracy` — no confusion matrix — so they are skipped). | done | Run `python scripts/backfill_metrics.py --write`, then `python run_all.py --aggregate` |
+| C6 (labels) | `run_all.py`: console summary now prints three explicitly titled tables (`f1_macro`, `f1_macro_all`, `balanced_accuracy`) with a header that says which dataset's F1 is positive-class and which is macro; `key_cols` gains `f1_macro_all` + `balanced_accuracy`. `src/visualize.py::plot_density_vs_performance` y-label is now `F1_LABEL[dataset]` instead of a hard-coded `Macro-F1 (%)`. | done | Regenerate `ch4_density_vs_performance.png` |
+| C9 (text) | Draft §6.1.3/§6.6/§8 already rewritten in Phase 1 to describe IGTD's one-row strip instead of "collisions" (naive/IGTD OF = OP = 0 is correct — the collisions belong to TINTO/DeepInsight). Verified by grep: no remaining "uz kolizije" for IGTD. | done | none |
+| C10 (figure) | `src/visualize.py`: suptitle retitled to *"Classification Performance by T2I Method and Architecture (per-dataset feature density annotated in panel titles)"*. `_titles.txt` `density_perf` row updated. Draft §6.4 bullet + figure-index row updated. | done | Regenerate the figure |
+| C13 + C20 | `run_all.py`: the dead, un-importable `ProgressTracker` class was deleted (never instantiated; referenced `datetime`/`timedelta` that were never imported). `src/t2i/__init__.py`: `compute_optimal_image_size` / `auto_size` marked "reference utility only — not part of the final protocol" (all reported images are 32×32). `src/train.py`: unused helpers marked in a header note. `src/t2i/s_igtd.py`: already marked NOT PART OF THE STUDY. | done | Say the same in chapter 5 when listing the code |
+| C14 | `src/models/__init__.py::get_model` now maps `resnet_scratch` (with `pretrained=False`, `input_channels=1` defaults) and `verify_all_models` covers it. | done | — |
+| C15 | `src/gradcam.py`: `target_class` is now actually used via `ClassifierOutputTarget`, with a fallback to the previous `targets=None` behaviour if the helper is unavailable. | done | Regenerate the 3 Grad-CAM figures and say in the caption that the map explains the *true* class |
+| C16 | `src/gradcam.py`: `cm.get_cmap('jet')` → `matplotlib.colormaps['jet']`. `src/baselines/xgboost_model.py`: `use_label_encoder=False` is now only passed when the xgboost major version is < 2. `requirements.txt`: reproducibility header, freeze instructions, the missing **TINTOlib** entry added, and the unused deps flagged. | done | Generate `requirements-lock.txt` from the final Colab run |
+| C17 | `src/visualize_t2i.py`: unreachable duplicate `return fig` deleted; the per-panel figure-of-merit renamed to "non-zero pixels: X %" (it is pixel coverage, not the study's feature density) and the suptitle retitled accordingly. | done | Regenerate with `python src/visualize_t2i.py` (~10 min CPU) |
+| C19 | `src/ablation.py`: new `_write_json_atomic()` (temp file + `os.replace`, numpy-aware `default=`), used by all three ablation outputs. Temp names match `results/*.json.tmp`, which `run_all.py` already cleans on startup. | done | — |
+| C21 | `.gitignore`: `results*.zip`, `SLR/`, `.freebuff/`, `_figure_preview.html` added. The 4 `results*.zip` (334–828 MB), `SLR/` and the SLR `.docx` are still deliberately **untracked**. | done | Decide whether the SLR `.docx` belongs in this repo at all (it is the literature review, not the seminar results paper) |
+
+### C6 backfill — measured effect (dry run, 2026-09-12)
+
+`python scripts/backfill_metrics.py` (dry run: reads and prints, writes nothing)
+scanned 54 JSON files: **45 carry a `confusion_matrix`** (36 CNN cells + 9
+baselines), the 9 ablation JSONs do not and are skipped.
+
+The recomputation is self-validating: for **dry_bean** the stored `f1_macro`
+*already is* a macro average, and `f1_macro_all` reproduces it exactly in all
+15 rows (0.9379/0.9379, 0.9328/0.9328, 0.9399/0.9399, …). For the two binary
+datasets the two numbers diverge exactly as predicted — mean |gap| **3.35 pp**,
+max **11.40 pp**.
+
+Numbers that matter for the write-up:
+
+| cell | stored F1 (positive class) | `f1_macro_all` | `balanced_accuracy` |
+|---|---|---|---|
+| adult_income / naive / resnet (pretrained) | 57.58 % | 63.68 % | 75.41 % |
+| adult_income / naive / resnet_scratch (best CNN) | 68.98 % | 77.67 % | 82.38 % |
+| adult_income / igtd / shallow | 68.52 % | 77.23 % | 82.16 % |
+| adult_income / xgboost (tabular baseline) | 71.43 % | 79.64 % | 83.98 % |
+
+Three consequences:
+
+1. The headline negative-transfer gap **survives a change of metric but changes
+   size**: −11.40 pp in positive-class F1 vs **−13.99 pp** in macro-F1. The
+   draft now quotes both and names the metric, so the claim cannot be attacked
+   as metric-shopping.
+2. The *right* statistic for "is this run better than predicting the majority
+   class?" is **balanced accuracy: 75.41 % against a 75.2 % majority rate** —
+   i.e. at chance for the minority class. That is a much stronger and cleaner
+   statement than the accuracy comparison, and it should be quoted together
+   with the C8 multi-seed repeat.
+3. The "T2I is lossy vs XGBoost" finding is metric-robust but narrower:
+   71.43 vs 68.98 (−2.45 pp) becomes 79.64 vs 77.67 (**−1.97 pp**) in macro-F1.
+
+### Colab sequence for Phase 2 (no training)
+
+```bash
+# 0. syntax check
+python -m py_compile src/visualize.py src/visualize_t2i.py src/ablation.py \
+    src/evaluate.py src/gradcam.py src/train.py src/models/__init__.py \
+    src/t2i/__init__.py src/baselines/xgboost_model.py run_all.py
+
+# 1. backfill the two comparable metrics into the 45 existing JSONs (dry run first)
+python scripts/backfill_metrics.py
+python scripts/backfill_metrics.py --write
+
+# 2. refresh the aggregate CSV and the console summary
+python run_all.py --aggregate
+
+# 3. regenerate ALL figures (t2i script is the slow one, ~10 min)
+python src/visualize.py
+python src/visualize_arrangement.py
+python src/visualize_pipeline.py
+python src/visualize_t2i.py
+```
+
+If the Phase-1 ablation re-runs are done in the same session, run steps 1–3
+*after* them so the aggregate CSV picks up the new ablation keys too.
+
+---
+
 ## C1 — CRITICAL: the feature-ordering ablation is invalid (per-split permutation)
 
 **Where.** `src/ablation.py:172` (`reorder_features`, `order == 'correlation'`),
@@ -726,7 +808,8 @@ Worth keeping on record because they are the things a professor checks first:
 4. C2 + C5 fix the overlap figure annotation and compute IGTD/naive overlap;
    regenerate the figure. *(~5 min)*
 
-**Phase 2 — no-rerun fixes (same day)**
+**Phase 2 — no-rerun fixes (same day)** — *implemented 2026-09-12, see the
+Phase 2 status section above*
 5. C6 add `f1_binary_macro` + `balanced_accuracy` from saved confusion matrices;
    fix `F1_LABEL` usage in `plot_density_vs_performance` and the `run_all.py`
    summary header.
