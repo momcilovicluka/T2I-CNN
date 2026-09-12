@@ -538,7 +538,26 @@ def run_lpft_ablation(dataset, t2i_method, output_dir='results'):
 # Main
 # ============================================================
 
+def _unbuffer_stdout():
+    """Make print() appear immediately when stdout is a pipe.
+
+    WHY: a Colab `%%bash`/`!` cell hands Python a PIPE, not a terminal, so Python
+    block-buffers stdout (~8 KB). This module's banners and progress lines all
+    used bare print(), so a multi-minute job printed NOTHING until the buffer
+    filled or the process exited — a working run was indistinguishable from a
+    hung one. Line buffering makes every print appear as it happens, including
+    prints made by libraries (TINTOlib) rather than this code. Equivalent to
+    `python -u`, without depending on how the job is launched.
+    """
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, OSError):
+        pass   # redirected/replaced stdout: buffering is then the caller's business
+
+
 def main():
+    _unbuffer_stdout()
+
     parser = argparse.ArgumentParser(description='Ablation study')
     parser.add_argument('--dataset', type=str, required=True,
                         help='Dataset name')

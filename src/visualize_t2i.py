@@ -158,6 +158,13 @@ def plot_pixel_density_comparison():
 
 def main():
     import os
+    # Live output when stdout is a pipe (Colab cells): see
+    # src.ablation._unbuffer_stdout.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, OSError):
+        pass
+
     os.makedirs('results/figures', exist_ok=True)
 
     print("Generating T2I method comparison...")

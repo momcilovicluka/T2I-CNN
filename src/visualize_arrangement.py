@@ -235,6 +235,13 @@ def plot_arrangement_quality(datasets=None, output_dir='results/figures'):
 
 
 def main():
+    # Live output when stdout is a pipe (Colab cells): see
+    # src.ablation._unbuffer_stdout.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, OSError):
+        pass
+
     ap = argparse.ArgumentParser()
     ap.add_argument('--dataset', choices=DATASETS, default=None,
                     help='only this dataset (default: all three)')

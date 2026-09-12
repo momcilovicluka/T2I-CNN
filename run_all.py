@@ -492,6 +492,14 @@ def main():
 
     global SCRATCH_3CH
 
+    # Live output: a Colab cell gives Python a PIPE, which it block-buffers, so a
+    # three-hour grid would print nothing until it finished. See
+    # src.ablation._unbuffer_stdout for the same fix in the ablation path.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, OSError):
+        pass
+
     from src.colab_sync import describe, sync_tree
     print(describe())
 

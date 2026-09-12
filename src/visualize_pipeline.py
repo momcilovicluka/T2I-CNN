@@ -125,6 +125,14 @@ def arrow(ax, x, y1, y2):
 
 
 def main():
+    # Live output when stdout is a pipe (Colab cells): see
+    # src.ablation._unbuffer_stdout.
+    import sys
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, OSError):
+        pass
+
     ap = argparse.ArgumentParser()
     ap.add_argument("--dpi", type=int, default=300)
     ap.add_argument("--output", default="results/figures/pipeline_diagram.png")

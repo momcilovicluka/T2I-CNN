@@ -2463,6 +2463,13 @@ def plot_overlap_diagnostics(output_dir='results/figures'):
 
 def main():
 
+    # Live output when stdout is a pipe (Colab cells): see
+    # src.ablation._unbuffer_stdout.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, OSError):
+        pass
+
     parser = argparse.ArgumentParser(description='Generate Chapter 4 figures')
 
     parser.add_argument('--heatmap-only', action='store_true')

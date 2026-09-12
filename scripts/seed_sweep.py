@@ -107,6 +107,14 @@ def summarize(rows, cells, seeds):
 
 
 def main():
+    # Live output: a Colab cell gives Python a PIPE, which it block-buffers, so a
+    # two-hour sweep would print nothing between runs. See
+    # src.ablation._unbuffer_stdout for the same fix elsewhere.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, OSError):
+        pass
+
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--cells', default=','.join(DEFAULT_CELLS),
                         help='comma-separated dataset/t2i/arch cells')
