@@ -55,11 +55,13 @@ def generate_gradcam(model, image, target_class, arch, device='cpu'):
     """
     from pytorch_grad_cam import GradCAM
 
-    from src.train import imagenet_normalize
+    from src.train import imagenet_normalize, uses_imagenet_normalization
 
     model = model.to(device)
     model.eval()
-    use_imagenet_norm = getattr(model, 'pretrained', False)
+    # Shared with train_model / evaluate_model so the saliency maps explain the
+    # same input pipeline the model actually saw (audit C11).
+    use_imagenet_norm = uses_imagenet_normalization(model)
 
     target_layer = get_target_layer(model, arch)
     cam = GradCAM(model=model, target_layers=[target_layer])

@@ -12,7 +12,9 @@ Usage:
 #   - zscore_normalize: superseded by imagenet_normalize for the pretrained
 #     models; the T2I wrappers handle their own scaling.
 #   - cross_validate: the study uses a single stratified 70/10/20 split (stated
-#     limitation); kept as a utility, not as a reported method.
+#     limitation); kept as a utility, not as a reported method. The variance
+#     requirement it was written for is now served by scripts/seed_sweep.py
+#     (audit C7), which repeats the claim-bearing cells over several seeds.
 # Do not cite these as part of the method.
 
 import torch
@@ -123,8 +125,9 @@ def train_model(model, train_loader, val_loader, config):
     best_model_state = None
     epochs_no_improve = 0
 
-    # Check if model is pretrained (needs ImageNet normalization)
-    use_imagenet_norm = getattr(model, 'pretrained', False)
+    # Pretrained (and, for the C11 control, 3-channel from-scratch) models need
+    # ImageNet normalization; see uses_imagenet_normalization.
+    use_imagenet_norm = uses_imagenet_normalization(model)
 
     epoch_start = time.time()
     for epoch in range(epochs):
@@ -297,6 +300,25 @@ def imagenet_normalize(images):
     # Apply ImageNet normalization
     images_norm = (images_rgb - IMAGENET_MEAN.to(images.device)) / IMAGENET_STD.to(images.device)
     return images_norm
+
+
+def uses_imagenet_normalization(model):
+    """True when a model expects 3-channel ImageNet-normalised input.
+
+    THE single source of truth for this decision — train_model, evaluate_model
+    and generate_gradcam all call it, so the training, evaluation and
+    visualisation paths can never disagree about the input pipeline.
+
+    WHY (audit C11): the pretrained-vs-scratch ResNet comparison was confounded
+    because the two arms differed in BOTH weight initialisation and input
+    pipeline (3ch + ImageNet norm vs 1ch raw grayscale).
+    run_all.create_cnn_model can now give the from-scratch arm the same input
+    pipeline via the `force_imagenet_norm` attribute, leaving weight init as the
+    only difference. A plain pretrained model still qualifies through its own
+    `pretrained` flag, so existing behaviour is unchanged.
+    """
+    return bool(getattr(model, 'pretrained', False)
+                or getattr(model, 'force_imagenet_norm', False))
 
 # === Cross-Validation (Issue 1: single split limitation) ===
 

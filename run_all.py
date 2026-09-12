@@ -78,6 +78,25 @@ ARCH_LR = {
 # removed instead of repaired. Do not cite it in the write-up.
 
 
+# C11 — pretrained vs from-scratch ResNet is confounded.
+#
+# 'resnet' (pretrained) receives ImageNet-normalised 3-channel input, while
+# 'resnet_scratch' receives raw 1-channel grayscale. A delta between them is
+# therefore a COMBINED effect of (a) weight initialisation and (b) input
+# pipeline, and cannot be attributed to pretraining alone
+# (professor-validation 9.1, rephrased in the draft).
+#
+# --scratch-3ch removes confound (b): the from-scratch arm then gets the same
+# 3-channel ImageNet-normalised pipeline, so the two arms differ only in how
+# the weights are initialised.
+#
+# Off by default, so the already-recorded 12 resnet_scratch cells stay exactly
+# reproducible. Turning it on INVALIDATES those 12 cells: back them up (they are
+# the 1-channel arms) and let the resume logic retrain them, or the write-up
+# will mix two different input pipelines under one column.
+SCRATCH_3CH = False
+
+
 def create_cnn_model(arch, num_classes):
     """Initialize a CNN model by architecture name.
 
@@ -86,10 +105,11 @@ def create_cnn_model(arch, num_classes):
     channel to 3). This keeps the original 3-channel conv1 with pretrained
     weights instead of replacing it with a 1-channel averaged version.
     From-scratch models use input_channels=1 (raw grayscale images).
-    NOTE (professor-validation 9.1, 2026-09-03): pretrained vs from-scratch
-    ResNet therefore differ in BOTH weight init and input representation
-    (3ch + ImageNet norm vs 1ch raw gray); any delta is a combined effect
-    and must not be attributed to pretraining alone.
+    NOTE (professor-validation 9.1, 2026-09-03; audit C11): pretrained vs
+    from-scratch ResNet therefore differ in BOTH weight init and input
+    representation (3ch + ImageNet norm vs 1ch raw gray); any delta is a
+    combined effect and must not be attributed to pretraining alone, unless the
+    module-level SCRATCH_3CH control described above is enabled.
     """
     if arch == 'shallow':
         from src.models.shallow_cnn import ShallowCNN
@@ -99,6 +119,16 @@ def create_cnn_model(arch, num_classes):
         return ResNetWrapper(num_classes=num_classes, pretrained=True, input_channels=3)
     elif arch == 'resnet_scratch':
         from src.models.resnet_wrapper import ResNetWrapper
+        if SCRATCH_3CH:
+            # C11 control arm: same input pipeline as the pretrained arm, so the
+            # only remaining difference is weight initialisation. The extra
+            # attribute is what train/evaluate/gradcam read via
+            # uses_imagenet_normalization(); without it a random-init model
+            # would silently receive un-normalised input.
+            model = ResNetWrapper(num_classes=num_classes, pretrained=False,
+                                  input_channels=3)
+            model.force_imagenet_norm = True
+            return model
         return ResNetWrapper(num_classes=num_classes, pretrained=False, input_channels=1)
     elif arch == 'vit':
         from src.models.vit_wrapper import ViTWrapper
@@ -125,8 +155,19 @@ def _experiment_is_done(result_file):
         return False
 
 
-def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
+def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results',
+                          seed=42, split_seed=None):
     """Run one CNN experiment: dataset -> T2I -> CNN -> evaluate.
+
+    Args:
+        seed: training seed — passed to set_global_seed, so it fixes the model
+            initialisation, batch order and any other RNG use.
+        split_seed: seed for the stratified train/val/test split. Defaults to
+            `seed`, i.e. varying the seed also varies the split, which is the
+            honest error bar ("would another split give another answer?").
+            Pass 42 explicitly to hold the split fixed and isolate training
+            noise only (audit C7). The default of 42 reproduces the recorded
+            grid exactly.
 
     Returns: dict with all metrics and metadata.
     """
@@ -137,15 +178,21 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     )
     from src.evaluate import evaluate_model
 
-    set_global_seed(42)
+    set_global_seed(seed)
     config = DATASET_CONFIG[dataset]
     num_classes = config['num_classes']
     image_size = config['image_size']
     cell_start = time.time()
 
     # 1. Load and preprocess dataset
-    print(f"  Loading {dataset}...")
-    data = preprocess_dataset(dataset)
+    # C7: splitting is seeded separately from training, so a seed sweep can
+    # choose between "another training run" (split_seed fixed) and "another
+    # split" (split_seed = seed). Existing behaviour: seed=42, split_seed=None
+    # -> random_state 42, identical to the recorded grid.
+    if split_seed is None:
+        split_seed = seed
+    print(f"  Loading {dataset} (seed={seed}, split_seed={split_seed})...")
+    data = preprocess_dataset(dataset, random_state=split_seed)
     X_train, X_val, X_test = data['X_train'], data['X_val'], data['X_test']
     y_train, y_val, y_test = data['y_train'], data['y_val'], data['y_test']
 
@@ -218,6 +265,17 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results'):
     metrics['test_samples'] = len(X_test)
     metrics['image_size'] = image_size
     metrics['lr'] = train_config['lr']
+    # Reproducibility / provenance (audit C7, C11): every cell now records the
+    # seeds that produced it and which input pipeline the from-scratch arm used,
+    # so a seed sweep and a 3-channel control run can never be mistaken for the
+    # recorded grid.
+    metrics['seed'] = seed
+    metrics['split_seed'] = split_seed
+    metrics['scratch_input'] = ('3ch-imagenet'
+                                if (cnn_arch == 'resnet_scratch' and SCRATCH_3CH)
+                                else ('1ch-raw'
+                                      if cnn_arch == 'resnet_scratch'
+                                      else 'default'))
     metrics['train_time_sec'] = round(train_time, 1)
     metrics['t2i_time_sec'] = round(t2i_time, 1)
     metrics['total_time_sec'] = round(time.time() - cell_start, 1)
@@ -416,6 +474,9 @@ def aggregate_results(output_dir='results'):
 
 def main():
     import argparse
+
+    global SCRATCH_3CH
+
     parser = argparse.ArgumentParser(description='Run all experiments')
     parser.add_argument('--cnn-only', action='store_true',
                         help='Run only CNN experiments')
@@ -432,9 +493,35 @@ def main():
                         help='Print what would run, do not train')
     parser.add_argument('--aggregate', action='store_true',
                         help='Aggregate existing results into CSV')
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Training seed (default: 42 = the recorded grid). '
+                             'Varying it also varies the split unless '
+                             '--split-seed is given (audit C7/C8)')
+    parser.add_argument('--split-seed', type=int, default=None,
+                        help='Hold the train/val/test split at this seed while '
+                             '--seed varies, to isolate training noise from '
+                             'split noise (audit C7)')
+    parser.add_argument('--scratch-3ch', action='store_true',
+                        help='C11 control: give resnet_scratch the same '
+                             '3-channel ImageNet-normalised input as the '
+                             'pretrained arm. INVALIDATES the existing 12 '
+                             '1-channel resnet_scratch cells')
+    parser.add_argument('--output-dir', default='results',
+                        help='Directory for result JSONs (default: results)')
     args = parser.parse_args()
 
-    results_dir = Path('results')
+    if args.scratch_3ch:
+        SCRATCH_3CH = True
+        print('=' * 70)
+        print('C11 CONTROL ENABLED: resnet_scratch now uses 3-channel '
+              'ImageNet-normalised input.')
+        print('The existing 1-channel resnet_scratch results are NOT '
+              'comparable. Back them up first:')
+        print('  mkdir -p results/backup_scratch_1ch && \\')
+        print('    mv results/*resnet_scratch* results/backup_scratch_1ch/')
+        print('=' * 70)
+
+    results_dir = Path(args.output_dir)
     results_dir.mkdir(exist_ok=True)
 
     # Clean up any partial .json.tmp files from interrupted previous runs
@@ -444,7 +531,7 @@ def main():
         os.remove(str(tmp))
 
     if args.aggregate:
-        aggregate_results()
+        aggregate_results(output_dir=str(results_dir))
         return
 
     run_baselines = not args.cnn_only
@@ -484,7 +571,10 @@ def main():
                     continue
                 print(f"\n[{i}/{len(combos)}] {dataset} + {t2i} + {cnn}")
                 try:
-                    run_single_experiment(dataset, t2i, cnn)
+                    run_single_experiment(dataset, t2i, cnn,
+                                          output_dir=str(results_dir),
+                                          seed=args.seed,
+                                          split_seed=args.split_seed)
                 except Exception as e:
                     print(f"  ERROR: {e}")
                     import traceback
@@ -524,7 +614,7 @@ def main():
 
     if not args.dry_run:
         print("\nAll experiments complete! Aggregating results...")
-        aggregate_results()
+        aggregate_results(output_dir=str(results_dir))
 
 
 if __name__ == '__main__':

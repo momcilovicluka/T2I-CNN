@@ -22,11 +22,13 @@ def evaluate_model(model, test_loader, num_classes, device='cpu'):
         accuracy, precision_macro, recall_macro, f1_macro,
         roc_auc, pr_auc, confusion_matrix, classification_report
     """
-    from src.train import imagenet_normalize
+    from src.train import imagenet_normalize, uses_imagenet_normalization
 
     model = model.to(device)
     model.eval()
-    use_imagenet_norm = getattr(model, 'pretrained', False)
+    # Must match train_model exactly, or the test set is scored on a different
+    # input pipeline than the model was trained on (audit C11).
+    use_imagenet_norm = uses_imagenet_normalization(model)
 
     all_preds = []
     all_labels = []
