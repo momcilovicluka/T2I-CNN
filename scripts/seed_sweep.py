@@ -169,6 +169,7 @@ def main():
     rows = {}
     for seed in seeds:
         out_dir = Path(args.out) / f'seed{seed}'
+        out_dir.mkdir(parents=True, exist_ok=True)
         for cell in cells:
             dataset, t2i, arch = cell
             key = '/'.join(cell)
