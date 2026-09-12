@@ -181,6 +181,7 @@ What it buys is turning those limitations into measurements.
 | C7 (`cross_validate`) | Decision: **keep, explicitly marked**. The train.py header note now states the variance requirement it was written for is served by `seed_sweep.py`. Wiring it into a `--cv` path would duplicate what the sweep already does via the identical training path, and it retrains 5 folds per cell. | done | — |
 | C11 | `run_all.py` gained the `SCRATCH_3CH` flag + `--scratch-3ch`. With it on, `resnet_scratch` is built with `input_channels=3` (conv1 architecture-identical to the pretrained arm) plus `force_imagenet_norm`. Normalisation is now decided by **one** predicate, `src/train.uses_imagenet_normalization()`, shared by `train_model`, `evaluate_model` and `generate_gradcam` — previously three independent `getattr(model, 'pretrained', False)` checks that could silently disagree, which is exactly the failure mode that would have made the control arm look fine while scoring un-normalised test images. | done | Back up the 12 `resnet_scratch` JSONs, then re-run those 12 cells with the flag |
 | C1 add-on | `src/visualize.py`: the feature-ordering figure now keys on `(dataset, method)` and draws one panel per method, so the naive run appears beside DeepInsight. This also fixed a **latent bug**: the old `by_ds = {r['dataset']: r}` silently dropped one method once two existed, so the naive control would have overwritten the DeepInsight bars in the figure. The footnote is conditional on which panels are present. | done | Run `--t2i naive`; regenerate the figure |
+| Durability | New `src/colab_sync.py` + hooks in `run_all.py`, `_write_json_atomic` and `seed_sweep.py`: each experiment mirrors itself to `$RESULTS_SYNC_DIR` the moment it is written, so a Colab disconnect costs at most the experiment in flight instead of hours. Additive and off by default (unset variable = no-op). | done | Set the variable per session; `python -m src.colab_sync --restore` after a reconnect |
 
 Verification performed locally (no training): `py_compile` on all touched files;
 model construction checked — default `resnet_scratch` = 1ch/no-norm (unchanged),
@@ -218,6 +219,10 @@ between Phase 3 being a day and being an hour.
 ### Colab sequence for Phase 3
 
 ```bash
+# 0. durability FIRST (Python cell, before any long run):
+#    import os; os.environ['RESULTS_SYNC_DIR'] = '/content/drive/MyDrive/t2i-results'
+#    See "Crash-safe long runs" above. Every job prints [sync] ON/OFF as line 1.
+
 # C1 add-on — the positive counterpart to the invariance result (~15 min)
 for ds in breast_cancer dry_bean adult_income; do
   python src/ablation.py --dataset $ds --t2i naive --feature-order
@@ -243,6 +248,63 @@ python src/visualize_t2i.py
 
 `--seed` / `--split-seed` default to 42, so nothing above changes the recorded
 grid unless a flag is passed. `seed_sweep.py` never writes into `results/*.json`.
+
+### Crash-safe long runs (`RESULTS_SYNC_DIR`)
+
+Phases 1 and 3 are hours of CPU, `results/` is gitignored, and a Colab VM is
+ephemeral — a disconnect or an idle timeout destroys work that cannot be
+recovered from git. Every experiment now mirrors its own output the instant it is
+written, via `src/colab_sync.py`, so an interrupted session loses at most the one
+experiment that was in flight.
+
+Enable it once per session, in a **Python** cell (so every later `%%bash` cell
+inherits it):
+
+```python
+import os
+os.environ['RESULTS_SYNC_DIR'] = '/content/drive/MyDrive/t2i-results'
+```
+
+With the variable unset every sync call is a no-op, so local runs are unchanged.
+Each long job prints its status as its first line, which is what makes the
+protection visible rather than assumed:
+
+- `[sync] ON - mirroring finished files to ...` — protected.
+- `[sync] OFF - set RESULTS_SYNC_DIR=...` — results live only on the VM.
+- `[sync] *** NOT WRITABLE *** ...` — **the dangerous case**: it looks protected
+  and is not (Drive not mounted, full, or a path that cannot be created). Fix it
+  before starting, not after.
+
+What is covered: every CNN cell and baseline JSON, each of the three ablation
+JSONs (`_write_json_atomic` mirrors on the way out), the state_dict of every cell
+that saves weights, and `results/seed_summary.csv`. Mirroring never raises — a
+dead drive cannot kill a two-hour run, it warns once per distinct error.
+
+**Recovering after a disconnect.** Mount Drive, then:
+
+```bash
+python -m src.colab_sync --restore      # copy the mirror back into results/
+python run_all.py                       # resume skips every completed cell
+for ds in breast_cancer dry_bean adult_income; do
+  python src/ablation.py --dataset $ds --t2i deepinsight --cnn shallow --all
+done
+```
+
+`--restore` never overwrites a local file, so a partly finished local run wins
+over a stale mirror. Ablation runs now resume by default, and an existing JSON is
+skipped **only** if it carries the keys the current code produces
+(`ABLATION_MARKERS`) — a pre-fix file is therefore correctly re-run instead of
+being trusted; `--force` recomputes regardless. `run_all.py` and `seed_sweep.py`
+were already resume-aware.
+
+To save everything at the end of a session (weights and figures included):
+
+```bash
+python -m src.colab_sync
+```
+
+That exits non-zero when the sync directory is unset, deliberately: in a `%%bash`
+cell it stops you from believing a session was backed up when it was not.
 
 ---
 
