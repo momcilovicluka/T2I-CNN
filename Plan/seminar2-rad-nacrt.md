@@ -49,8 +49,10 @@ dostižu nivo klasičnih metoda (na Breast Cancer 97,22 % naspram RF 96,55 %
 F1 pozitivne klase), dok na Adult Income XGBoost nadmašuje sve CNN+T2I
 kombinacije (71,43 % naspram 68,98 %) — posledica gubitne konverzije
 visokodimenzionalnih one-hot obeležja. Mešanje piksela obara makro-F1 na Dry
-Bean za 85,21 pp, što potvrđuje da CNN zaista koriste prostorni raspored
-atributa. Transfer učenje sa ImageNet-a ne donosi sistematsku prednost na
+Bean za 85,21 pp — model treniran na originalnom rasporedu ne prenosi se na
+permutovani ulaz (distribucioni pomak, krak A); da li sam raspored nosi
+informaciju proverava se ponovnim treniranjem na istoj permutaciji (krak B,
+§6.6). Transfer učenje sa ImageNet-a ne donosi sistematsku prednost na
 sintetičkim T2I slikama; na Adult Income sa naivnim slikama pretrenirani
 ResNet-18 beleži negativan transfer od −11,40 pp u F1, a LP-FT gubi od
 direktnog finog podešavanja. Prostorni raspored jeste relevantan, ali je
@@ -79,8 +81,10 @@ features (97.22% vs. 96.55% positive-class F1 over Random Forest on Breast
 Cancer), while on Adult Income XGBoost beats every CNN+T2I combination
 (71.43% vs. 68.98%) — a consequence of the lossy conversion of
 high-dimensional one-hot features. Pixel shuffling drops macro-F1 on Dry Bean by
-85.21 pp, confirming that the CNNs genuinely exploit the spatial arrangement
-of features. ImageNet transfer learning provides no systematic benefit on
+85.21 pp — a model trained on the original layout does not transfer to a
+permuted input (a distribution shift, arm A); whether the layout itself carries
+information is tested by retraining on the same permutation (arm B, §6.6).
+ImageNet transfer learning provides no systematic benefit on
 synthetic T2I images: on Adult Income with naive images the pretrained
 ResNet-18 exhibits negative transfer of −11.40 pp in F1, and LP-FT underperforms
 direct fine-tuning. Spatial arrangement matters, yet less than the
@@ -605,9 +609,13 @@ Da bi se dokazalo da **prostorna struktura** (a ne puka činjenica da je ulaz
 „slika“) doprinosi rezultatu, sprovedene su tri ablacije (na
 DeepInsight/ShallowCNN po skupu, uz preostale kombinacije gde je navedeno):
 
-1. **Mešanje piksela (pixel shuffling):** ista permutacija piksela primenjena na
-   sve test slike (listing 5.11). Ako F1 značajno opadne (>0,02), CNN zaista
-   koristi prostorni raspored; ako ne, transformacija se svodi na vektor.
+1. **Mešanje piksela (pixel shuffling):** ista permutacija piksela (seed 42)
+   primenjena na sve slike, u dva kraka: krak A — model treniran na originalnim
+   slikama, testiran na permutovanim (osetljivost na promenu ulaza); krak B —
+   model ponovo treniran na istoj permutaciji i testiran na njoj (da li raspored
+   nosi informaciju). Sam pad F1 u kraku A ne dokazuje da CNN koristi prostornu
+   strukturu: permutacija istovremeno pomera vrednosti van naučenih koordinata i
+   uništava susedstva, pa je za taj zaključak neophodan i krak B (§6.6).
 2. **Redosled atributa (feature ordering):** porede se originalni, nasumični
    (fiksno seme), obrnuti i redosled sortiran po apsolutnoj korelaciji sa
    ciljnom klasom. Ako poredak utiče na F1, aranžman je relevantan.
@@ -1175,9 +1183,14 @@ def shuffle_pixels(images, seed=42):
 ```
 Listing 5.11. Ablacija mešanja piksela (`src/ablation.py`, skraćeno).
 
-Ako F1 nakon mešanja značajno opadne, CNN koristi prostornu strukturu; ako ostane
-isti, transformacija je funkcionalno ekvivalentna vektoru — što je najjači
-kontrolni eksperiment celokupnog pristupa.
+Pad F1 nakon mešanja kod modela treniranog na originalnim slikama znači samo da
+naučeno rešenje ne prenosi na novi raspored ulaza (distribucioni pomak), a ne da
+je raspored bio neophodan — permutacija istovremeno pomera informativne vrednosti
+van naučenih koordinata i uništava susedstva. Zato ablacija ima dva kraka (§6.6):
+krak A meri tu osetljivost, a krak B — ponovno treniranje i testiranje na istoj
+permutaciji — razlikuje oslanjanje na susedstva (F1 ostaje nizak) od oslanjanja
+na fiksne pozicije (F1 se vraća na nivo originala). Ovo je centralni kontrolni
+eksperiment pristupa, ali je validan samo sa oba kraka.
 
 ## 5.12 Šta implementacija govori o rezultatima
 
