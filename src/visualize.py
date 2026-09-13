@@ -227,6 +227,130 @@ def _load_t2i_pixel_range(results_dir, dataset, t2i_method, cnn_arch):
 
 
 
+def _wrap_note(text, width=118):
+
+    """Wrap a figure footnote so bbox_inches='tight' cannot stretch the canvas.
+
+
+
+    A single long fig.text line widens the saved PNG, which shrinks the panels
+
+    to nothing once the figure is scaled to a page width: the feature-ordering
+
+    figure went from 3980 to 6208 px wide when its footnote grew.
+
+    """
+
+    import textwrap
+
+    return '\n'.join(textwrap.wrap(text, width))
+
+
+
+def load_seed_summary(path='results/seed_summary.csv'):
+
+    """Per-cell seed statistics written by scripts/seed_sweep.py.
+
+
+
+    Returns {(dataset, t2i, arch): {metric: {'mean':, 'std':, 'n':}}}. Empty
+
+    when the sweep has not been run, in which case every figure falls back to
+
+    the single-run values it has always used.
+
+
+
+    WHY (post-run validation, 2026-09-13): the recorded adult_income/naive/resnet
+
+    cell was a barely-trained checkpoint (F1 57.58 %), while five repeats of the
+
+    same configuration give 68.36 +/- 0.82 %. A figure that draws the recorded
+
+    value as a bare bar therefore carries an artefact as if it were a result.
+
+    """
+
+    import csv
+
+    summary = {}
+
+    csv_path = Path(path)
+
+    if not csv_path.exists():
+
+        return summary
+
+    with open(csv_path, newline='') as f:
+
+        for row in csv.DictReader(f):
+
+            parts = row['cell'].split('/')
+
+            if len(parts) != 3:
+
+                continue
+
+            try:
+
+                summary.setdefault(tuple(parts), {})[row['metric']] = {
+
+                    'mean': float(row['mean']),
+
+                    'std': float(row['std']) if row['std'] else float('nan'),
+
+                    'n': int(row['n']),
+
+                }
+
+            except (KeyError, ValueError):
+
+                continue
+
+    return summary
+
+
+
+def paired_delta_with_error(seed_summary, dataset, t2i):
+
+    """Delta F1 between the resnet and resnet_scratch arms, from the sweep.
+
+
+
+    Returns (delta_pct, half_width_pct, n) or None. The two arms share a split
+
+    within each seed, so the difference of means with its combined standard
+
+    error is the honest interval; ±2 se is drawn, which is an approximate
+
+    interval, not a significance test (5 seeds).
+
+    """
+
+    if not seed_summary:
+
+        return None
+
+    a = seed_summary.get((dataset, t2i, 'resnet'), {}).get('f1_macro')
+
+    b = seed_summary.get((dataset, t2i, 'resnet_scratch'), {}).get('f1_macro')
+
+    if not a or not b or a['n'] < 2 or b['n'] < 2:
+
+        return None
+
+    if a['std'] != a['std'] or b['std'] != b['std']:
+
+        return None
+
+    delta = (a['mean'] - b['mean']) * 100
+
+    se = np.sqrt(a['std'] ** 2 / a['n'] + b['std'] ** 2 / b['n']) * 100
+
+    return delta, 2 * se, min(a['n'], b['n'])
+
+
+
 def load_ablation_results(results_dir='results', prefix='ablation_'):
 
     """Load ablation results from JSON files."""
@@ -891,85 +1015,113 @@ def plot_ablation_results(output_dir='results/figures'):
 
     if shuffle_results:
 
-        fig, ax = plt.subplots(figsize=(8, 5))
+        # Post-run validation (2026-09-13): each JSON stores TWO arms, and the
 
+        # `conclusion` field is derived from arm B. Drawing only arm A showed a
 
+        # -85.2 pp drop on Dry Bean, which reads as "the CNN needs the layout" --
 
-        datasets_with_data = list(set(r['dataset'] for r in shuffle_results))
+        # the opposite of what the ablation concludes. Both arms are drawn now,
+
+        # together with the JSON's own per-dataset conclusion.
+
+        by_ds = {r['dataset']: r for r in shuffle_results}
+
+        datasets_with_data = [d for d in DATASETS if d in by_ds]
+
+        fig, ax = plt.subplots(figsize=(9.5, 5))
 
         n = len(datasets_with_data)
 
         x = np.arange(n)
 
-        width = 0.35
-
-
+        width = 0.26
 
         original_f1s = []
 
-        shuffled_f1s = []
+        arm_a_f1s = []
+
+        arm_b_f1s = []
 
         labels = []
 
-
+        conclusions = []
 
         for ds in datasets_with_data:
 
-            ds_results = [r for r in shuffle_results if r['dataset'] == ds]
+            r = by_ds[ds]
 
-            if ds_results:
+            original_f1s.append(r['original_f1'] * 100)
 
-                r = ds_results[0]
+            arm_a_f1s.append(r['shuffled_f1'] * 100)
 
-                original_f1s.append(r['original_f1'] * 100)
+            arm_b_f1s.append(r['shuffled_train_f1'] * 100)
 
-                shuffled_f1s.append(r['shuffled_f1'] * 100)
+            labels.append(DATASET_LABELS[ds].split('\n')[0])
 
-                labels.append(DATASET_LABELS[ds].split('\n')[0])
+            conclusions.append(r.get('conclusion', ''))
 
+        series = [
 
+            ('Original layout', original_f1s, '#4c72b0'),
 
-        bars1 = ax.bar(x - width/2, original_f1s, width, label='Original',
+            ('A: trained original, tested shuffled', arm_a_f1s, '#c44e52'),
 
-                       color='#4c72b0', edgecolor='white')
+            ('B: trained shuffled, tested shuffled', arm_b_f1s, '#55a868'),
 
-        bars2 = ax.bar(x + width/2, shuffled_f1s, width, label='Shuffled',
+        ]
 
-                       color='#c44e52', edgecolor='white')
+        for k, (series_label, series_vals, colour) in enumerate(series):
 
+            bars = ax.bar(x + (k - 1) * width, series_vals, width,
 
+                          label=series_label, color=colour, edgecolor='white')
 
-        for bar, val in zip(bars1, original_f1s):
+            for bar, val in zip(bars, series_vals):
 
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
+                ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.8,
 
-                    f'{val:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+                        f'{val:.1f}', ha='center', va='bottom', fontsize=8,
 
-        for bar, val in zip(bars2, shuffled_f1s):
-
-            ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.3,
-
-                    f'{val:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
-
-
+                        fontweight='bold')
 
         ax.set_xticks(x)
 
         ax.set_xticklabels(labels, fontsize=10)
 
-        ax.set_ylabel('F1 (%)')  # shared axis across datasets: macro for dry_bean, positive-class otherwise (PART 13e)
+        # Shared axis across datasets; the stored F1 is positive-class for the
+
+        # two binary datasets and macro for dry_bean (audit C6, PART 13e).
+
+        ax.set_ylabel('F1 (%)')
+
+        ax.set_ylim(0, 110)
 
         ax.set_title('Ablation: Pixel Shuffling (DeepInsight + ShallowCNN)',
 
                      fontsize=12, fontweight='bold')
 
-        ax.legend(fontsize=10)
+        ax.legend(fontsize=8.5, loc='lower left', frameon=False)
 
         ax.spines['top'].set_visible(False)
 
         ax.spines['right'].set_visible(False)
 
+        note = ('Arm A trains on the original layout and tests on a permuted one, so it '
 
+                'measures distribution shift rather than structure use. Arm B retrains '
+
+                'on the same permutation, so a bar back at the original level means the '
+
+                'layout was not required. Stored conclusions: '
+
+                + '; '.join(f'{DATASET_LABELS[d].splitlines()[0]}: {c}'
+
+                            for d, c in zip(datasets_with_data, conclusions)))
+
+        fig.text(0.5, -0.05, _wrap_note(note), ha='center', va='top', fontsize=8,
+
+                 style='italic', color='#555555')
 
         plt.tight_layout()
 
@@ -979,7 +1131,9 @@ def plot_ablation_results(output_dir='results/figures'):
 
         plt.close(fig)
 
-        print(f"  Saved: {path.name}")    # Feature Ordering
+        print(f"  Saved: {path.name}")
+
+    # Feature Ordering
 
     # C1 add-on: this figure must handle MORE THAN ONE T2I method. With only the
 
@@ -1081,15 +1235,21 @@ def plot_ablation_results(output_dir='results/figures'):
 
                     'For DeepInsight the layout is derived from feature relationships, so the four '
 
-                    'bars coincide — an invariance result, not evidence about ordering. For the naive '
+                    'bars coincide: an invariance result, not evidence about ordering. For the naive '
 
-                    'layout each column maps straight onto a pixel, so the bars separate: that '
+                    'layout each column maps onto a pixel, so the bars do separate — but read the '
 
-                    'contrast is what shows the input ordering can matter at all. The earlier '
+                    'spread against the seed noise, not against zero: 0.7 pp on Adult and Dry Bean '
 
-                    '"correlation-sorted is worst" finding was a per-split permutation artefact and '
+                    '(seed sd 0.36/0.37 pp) and 2.9 pp on Breast, with no consistent direction (a '
 
-                    'has been removed.')
+                    'random permutation is best on Breast, "reversed" on Adult and Dry Bean). The '
+
+                    'naive panel therefore shows SENSITIVITY to input order, not a directional '
+
+                    'ordering effect. The earlier "correlation-sorted is worst" finding was a '
+
+                    'per-split permutation artefact and has been removed.')
 
         else:
 
@@ -1099,13 +1259,13 @@ def plot_ablation_results(output_dir='results/figures'):
 
                     'invariant to input column order and the four bars are expected to be identical. '
 
-                    'Run the same ablation with --t2i naive for the contrast that demonstrates an '
+                    'Run the same ablation with --t2i naive for the contrast that shows whether input '
 
-                    'ordering effect. The earlier "correlation-sorted is worst" finding was a '
+                    'order has any measurable effect at all. The earlier "correlation-sorted is '
 
-                    'per-split permutation artefact and has been removed.')
+                    'worst" finding was a per-split permutation artefact and has been removed.')
 
-        fig.text(0.5, 0.02, note, ha='center', va='center', fontsize=8,
+        fig.text(0.5, 0.02, _wrap_note(note), ha='center', va='center', fontsize=8,
 
                  style='italic', color='#555555')
 
@@ -1189,7 +1349,13 @@ def plot_ablation_results(output_dir='results/figures'):
 
         ax.set_xticklabels(labels, fontsize=10)
 
-        ax.set_ylabel('Macro-F1 (%)')
+        # Audit C6: the stored F1 is positive-class for breast/adult and macro
+
+        # for dry_bean, so a bare 'Macro-F1' axis mislabels two of the three
+
+        # datasets and makes the three bars look comparable when they are not.
+
+        ax.set_ylabel('F1 (%)')
 
         ax.set_title('Ablation: LP-FT vs Direct Fine-Tuning (ResNet-18 pretrained)',
 
@@ -2157,6 +2323,16 @@ def plot_transfer_delta(results, output_dir='results/figures'):
 
 
 
+    # Post-run validation (2026-09-13): draw the paired interval for the pairs
+
+    # that were repeated over seeds, instead of a bare point estimate for a
+
+    # configuration whose recorded single run is known to be unreliable.
+
+    seed_summary = load_seed_summary()
+
+    seeded = []
+
     fig, axes = plt.subplots(1, 3, figsize=(15, 5), sharey=True)
 
     made = False
@@ -2168,6 +2344,8 @@ def plot_transfer_delta(results, output_dir='results/figures'):
         ax = axes[idx]
 
         deltas = []
+
+        errs = []
 
         labels = []
 
@@ -2193,7 +2371,23 @@ def plot_transfer_delta(results, output_dir='results/figures'):
 
                 continue
 
-            deltas.append((pre_r['f1_macro'] - scr_r['f1_macro']) * 100)
+            swept = paired_delta_with_error(seed_summary, dataset, method)
+
+            if swept:
+
+                delta, half_width, _ = swept
+
+                seeded.append(f'{dataset}/{method}')
+
+            else:
+
+                delta = (pre_r['f1_macro'] - scr_r['f1_macro']) * 100
+
+                half_width = 0.0
+
+            deltas.append(delta)
+
+            errs.append(half_width)
 
             labels.append(T2I_LABELS[method])
 
@@ -2213,7 +2407,13 @@ def plot_transfer_delta(results, output_dir='results/figures'):
 
         bars = ax.bar(range(len(deltas)), deltas, color=colors,
 
-                      edgecolor='white', linewidth=0.5)
+                      edgecolor='white', linewidth=0.5,
+
+                      yerr=errs if any(e > 0 for e in errs) else None,
+
+                      capsize=3,
+
+                      error_kw={'elinewidth': 1.1, 'ecolor': '#444444'})
 
         ax.axhline(0, color='black', linewidth=1)
 
@@ -2262,6 +2462,20 @@ def plot_transfer_delta(results, output_dir='results/figures'):
     fig.suptitle('Transfer Learning Effect: ResNet-18 pretrained vs from scratch',
 
                  fontsize=14, fontweight='bold', y=1.02)
+
+    if seeded:
+
+        note = ('Error bars are ±2 se over seeds 42–46 for the pairs repeated in '
+
+                'results/seed_summary.csv (split varies with the seed): '
+
+                + ', '.join(seeded) + '. Every other bar is a single run, so '
+
+                'differences of a few tenths of a pp are not interpretable.')
+
+        fig.text(0.5, -0.03, _wrap_note(note), ha='center', va='top', fontsize=8,
+
+                 style='italic', color='#555555')
 
     plt.tight_layout()
 

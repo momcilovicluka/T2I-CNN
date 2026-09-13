@@ -137,6 +137,56 @@ def create_cnn_model(arch, num_classes):
         raise ValueError(f"Unknown architecture: {arch}")
 
 
+def _backup_cell(result_file, results_dir, backup_dir_name='backup_pre_rerun'):
+    """Move an existing result JSON (and its weights) aside before a re-run.
+
+    A forced re-run must never destroy the evidence for why it was forced: the
+    recorded adult_income/naive/resnet JSON (F1 57.58 %) is the artefact the
+    seminar's audit trail refers to, so it is preserved rather than overwritten.
+    Mirrored to $RESULTS_SYNC_DIR like every other result.
+
+    Returns the list of file names moved.
+    """
+    import shutil
+    from src.colab_sync import sync_path
+
+    backup_dir = Path(results_dir) / backup_dir_name
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    moved = []
+    candidates = [result_file, result_file.with_name(result_file.stem + '_model.pt')]
+    for path in candidates:
+        if not path.exists():
+            continue
+        dest = backup_dir / path.name
+        n = 2
+        while dest.exists():          # never clobber an earlier backup
+            dest = backup_dir / f'{path.stem}_run{n}{path.suffix}'
+            n += 1
+        try:
+            shutil.move(str(path), str(dest))
+        except OSError as exc:
+            print(f"    ! could not back up {path.name}: {exc}")
+            continue
+        moved.append(dest.name)
+        sync_path(dest)
+    return moved
+
+
+def parse_cells(spec):
+    """Parse 'dataset/t2i/arch,dataset/t2i/arch' into a set of triples."""
+    cells = set()
+    for item in spec.split(','):
+        item = item.strip()
+        if not item:
+            continue
+        parts = tuple(p.strip() for p in item.split('/'))
+        if len(parts) != 3:
+            sys.exit(f"Bad --cells entry {item!r}; expected dataset/t2i/arch, "
+                     f"e.g. adult_income/naive/resnet")
+        cells.add(parts)
+    return cells
+
+
 def _experiment_is_done(result_file):
     """True only if the result JSON exists AND parses as a complete result.
 
@@ -290,6 +340,15 @@ def run_single_experiment(dataset, t2i_method, cnn_arch, output_dir='results',
     metrics['final_train_loss'] = history['train_loss'][-1]
     metrics['final_val_loss'] = history['val_loss'][-1]
     metrics['history'] = history
+    # Checkpoint provenance (post-run validation, 2026-09-13): surface the
+    # fields written by train_model at top level, so the screen
+    # (scripts/audit_cells.py) and the stability table can read them without
+    # walking the whole history. `best_epoch` in particular is what exposes a
+    # result frozen on a barely-trained checkpoint.
+    for _key in ('best_epoch', 'best_val_loss', 'epochs_run', 'stopped_early',
+                 'val_loss_oscillation', 'device'):
+        if _key in history:
+            metrics[_key] = history[_key]
 
     # 11. Save model weights (needed for Grad-CAM visualization)
     from src.colab_sync import sync_path
@@ -417,6 +476,7 @@ def aggregate_results(output_dir='results'):
 
     results_dir = Path(output_dir)
     all_results = []
+    stale_backfill = []
 
     for json_file in sorted(results_dir.glob('*.json')):
         if json_file.name.startswith('ablation_'):
@@ -424,6 +484,15 @@ def aggregate_results(output_dir='results'):
         try:
             with open(json_file) as f:
                 data = json.load(f)
+            # C6: a grid cell written before the metrics change carries no
+            # `f1_macro_all`, so the CSV column would silently be empty for it.
+            # Post-run validation (2026-09-13): this is now loud instead of
+            # silent — the first aggregate pass after the Colab run shipped a
+            # CSV containing only the 9 baseline rows.
+            if data.get('t2i_method') not in (None, 'none'):
+                for key in ('f1_macro_all', 'balanced_accuracy'):
+                    if key not in data:
+                        stale_backfill.append((json_file.name, key))
             # Flatten for CSV (exclude history and confusion_matrix)
             row = {k: v for k, v in data.items()
                    if k not in ('history', 'classification_report')}
@@ -436,6 +505,22 @@ def aggregate_results(output_dir='results'):
         return
 
     df = pd.DataFrame(all_results)
+
+    cnn_rows = int((df['t2i_method'] != 'none').sum()) if 't2i_method' in df.columns else 0
+    print(f"  Loaded {len(df)} result dicts "
+          f"({cnn_rows} CNN/T2I cells, {len(df) - cnn_rows} baselines)")
+    if stale_backfill:
+        names = sorted({n for n, _ in stale_backfill})
+        print(f"  !! {len(names)} grid cell(s) lack the C6 metrics "
+              f"({', '.join(sorted({k for _, k in stale_backfill}))}).")
+        print(f"     Run: python scripts/backfill_metrics.py --write")
+        print(f"     Affected: {', '.join(names[:5])}"
+              f"{f' … +{len(names) - 5} more' if len(names) > 5 else ''}")
+    if cnn_rows == 0:
+        sys.exit('Refusing to write all_experiments.csv: no CNN/T2I rows were '
+                 'found. results/ looks like it is missing the grid JSONs, and '
+                 'a baselines-only CSV would silently look complete.')
+
 
     # Select key columns for the summary CSV
     # C6: `f1_macro_all` + `balanced_accuracy` are cross-dataset-comparable
@@ -534,6 +619,16 @@ def main():
                              '1-channel resnet_scratch cells')
     parser.add_argument('--output-dir', default='results',
                         help='Directory for result JSONs (default: results)')
+    parser.add_argument('--cells', type=str, default=None,
+                        help='Comma-separated dataset/t2i/arch triples to run, '
+                             'e.g. adult_income/naive/resnet,adult_income/naive/shallow. '
+                             'Use this to re-run a specific cell without touching '
+                             'the rest of the grid (post-run validation, 2026-09-13).')
+    parser.add_argument('--force', action='store_true',
+                        help='Re-run selected cells even when a complete result '
+                             'JSON already exists. The existing JSON and its '
+                             '_model.pt are moved to results/backup_pre_rerun/ '
+                             'first, so the original evidence survives.')
     args = parser.parse_args()
 
     if args.scratch_3ch:
@@ -565,6 +660,14 @@ def main():
 
     run_baselines = not args.cnn_only
     run_cnn = not args.baselines
+    if args.cells:
+        # --cells names dataset/t2i/arch triples, so the tabular baselines are
+        # out of scope by construction: a targeted re-run of a CNN cell must not
+        # be able to force-retrain (and overwrite) the baseline JSONs.
+        if run_baselines:
+            print('--cells given: baselines are out of scope and will not run.')
+        run_baselines = False
+        run_cnn = True
 
     if run_cnn:
         archs = CNN_ARCHITECTURES
@@ -578,10 +681,24 @@ def main():
         if args.dataset:
             combos = [(d, t, c) for d, t, c in combos if d == args.dataset]
 
+        if args.cells:
+            wanted = parse_cells(args.cells)
+            unknown = [c for c in wanted if c not in set(combos)]
+            if unknown:
+                valid = sorted({(a, b, c) for a, b, c in combos})
+                sys.exit(f"--cells entries not in this run's grid: "
+                         f"{['/'.join(u) for u in unknown]}\n"
+                         f"Valid combinations here: "
+                         f"{['/'.join(v) for v in valid]}")
+            combos = [c for c in combos if c in wanted]
+            print(f"--cells: {len(combos)} cell(s) selected")
+
         if args.dry_run:
             print(f"Would run {len(combos)} CNN experiments:")
             for d, t, c in combos:
                 print(f"  {d} + {t} + {c}")
+            if args.force:
+                print("(--force: existing results would be backed up and re-run)")
         else:
             # Count already-done experiments for resume summary
             done_count = 0
@@ -595,10 +712,14 @@ def main():
             print(f"Running {len(combos)} CNN experiments...")
             for i, (dataset, t2i, cnn) in enumerate(combos, 1):
                 result_file = results_dir / f"{dataset}_{t2i}_{cnn}.json"
-                if _experiment_is_done(result_file):
+                if _experiment_is_done(result_file) and not args.force:
                     print(f"\n[{i}/{len(combos)}] {dataset} + {t2i} + {cnn} — SKIP (done)")
                     continue
                 print(f"\n[{i}/{len(combos)}] {dataset} + {t2i} + {cnn}")
+                if args.force and result_file.exists():
+                    moved = _backup_cell(result_file, results_dir)
+                    print(f"  backed up to {results_dir}/backup_pre_rerun/: "
+                          f"{', '.join(moved) if moved else 'nothing to move'}")
                 try:
                     run_single_experiment(dataset, t2i, cnn,
                                           output_dir=str(results_dir),

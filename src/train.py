@@ -228,6 +228,28 @@ def train_model(model, train_loader, val_loader, config):
         model.load_state_dict(best_model_state)
     model = model.cpu()
 
+    # --- Checkpoint provenance (post-run validation, 2026-09-13) -----------
+    # WHICH epoch the reported model came from is part of the result, not a
+    # detail. The recorded adult_income/naive/resnet cell early-stopped at
+    # epoch 17 with its best checkpoint at epoch 2, reported F1 57.58 %, and
+    # five repeats of the identical configuration gave 68.36 +/- 0.82 %.
+    # Recording these fields lets scripts/audit_cells.py flag that class of
+    # artifact across the whole grid without retraining anything.
+    val_losses = np.asarray(history['val_loss'], dtype=float)
+    finite = np.isfinite(val_losses)
+    best_idx = int(np.argmin(np.where(finite, val_losses, np.inf))) if finite.any() else 0
+    lo = float(val_losses[finite].min()) if finite.any() else float('nan')
+    hi = float(val_losses[finite].max()) if finite.any() else float('nan')
+    history['best_epoch'] = best_idx + 1          # 1-based, same as the log lines
+    history['best_val_loss'] = lo
+    history['epochs_run'] = len(history['val_loss'])
+    history['stopped_early'] = len(history['val_loss']) < epochs
+    # Oscillation: a run whose validation loss swings by more than ~3x was not
+    # stably optimised at this learning rate, which makes its selected
+    # checkpoint a poor summary of the configuration.
+    history['val_loss_oscillation'] = (hi / lo) if lo > 0 else float('nan')
+    history['device'] = str(device)
+
     return model, history
 
 
