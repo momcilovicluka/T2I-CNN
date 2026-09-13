@@ -39,6 +39,9 @@ from pathlib import Path
 import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+# `python scripts/backfill_metrics.py` puts scripts/ (not the repo root) on
+# sys.path, so `from src...` imports fail without this (ModuleNotFoundError).
+sys.path.insert(0, str(REPO_ROOT))
 
 
 def metrics_from_confusion_matrix(cm):
@@ -141,8 +144,13 @@ def main():
             os.replace(str(tmp_file), str(json_file))
             # Durability: mirror the rewritten file, so the backfilled metrics
             # survive a lost session like every other result (src/colab_sync.py).
-            from src.colab_sync import sync_path
-            sync_path(json_file)
+            # Guarded: mirroring must never kill the backfill itself.
+            try:
+                from src.colab_sync import sync_path
+            except ImportError:
+                pass
+            else:
+                sync_path(json_file)
 
     print(f'\nScanned {len(json_files)} JSON files in {results_dir}')
     print(f'  result dicts with a confusion matrix: {counters["annotated"]}'

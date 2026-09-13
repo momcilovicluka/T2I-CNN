@@ -17,7 +17,13 @@ Layout notes:
 """
 
 import argparse
+import sys
 from pathlib import Path
+
+# `python src/visualize_pipeline.py` puts src/ (not the repo root) on
+# sys.path, so the `from src...` import below fails without this
+# (ModuleNotFoundError).
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import matplotlib
 matplotlib.use("Agg")
@@ -177,8 +183,13 @@ def main():
     fig.savefig(out, dpi=args.dpi, bbox_inches="tight", facecolor="white")
     plt.close(fig)
     print(f"Saved: {out} ({out.stat().st_size/1024:.0f} KiB, dpi={args.dpi})")
-    from src.colab_sync import sync_path
-    sync_path(out)
+    # Guarded: Drive mirroring must never fail the figure generation itself.
+    try:
+        from src.colab_sync import sync_path
+    except ImportError:
+        pass
+    else:
+        sync_path(out)
 
 
 if __name__ == "__main__":
