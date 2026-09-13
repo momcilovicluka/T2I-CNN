@@ -609,6 +609,16 @@ image generation deterministic per dataset." (TINTOlib is PCA-based
 with a fixed seed; like any third-party library, bit-level output may
 differ slightly across versions/hardware.)
 
+**Do not overclaim this as study-wide determinism.** It makes *image
+generation* deterministic. Training a CNN on those images is NOT
+bit-reproducible at this scale — the same configuration, seed and split gave
+97.22 % in the main table and 98.63 % in the LP-FT ablation on breast (audit
+C4), and one recorded cell selected its checkpoint at epoch 2 of 50 and
+reported 57.58 % where five repeats give 68.36 ± 0.82 % (audit C8, post-run
+validation 2026-09-13). Consequence for the write-up: quote the cells that
+carry a claim from `results/stability_table.md` (mean ± sd over seeds 42-46)
+and never interpret a single-run difference below roughly one pp.
+
 ### 11.3 Baselines trained on the same X_train rows as the CNNs
 **Verified in `run_all.py` `run_baseline()`: RF/XGBoost/MLP load
 `preprocess_dataset()` and train on `X_train` only — never train+val.
@@ -1101,7 +1111,10 @@ adult). This is deliberate, not an oversight:
   shared between cells, so no cross-cell state can leak or drift.
 - **Determinism:** fit is seeded (global seed 42 per cell), so the 3
   recomputed mappings are identical; metrics are unaffected by the
-  repetition.
+  repetition. This covers the T2I fit/transform, not model training:
+  training is not bit-reproducible here (audit C4, and C8's epoch-2 checkpoint),
+  which is why the claim-bearing cells are reported as mean ± sd over seeds
+  42–46 in `results/stability_table.md`.
 - **Honest timing:** `t2i_time_sec`/`total_time_sec` therefore measure
   the true per-cell wall clock, including the repeated fit. A cached
   design would lower wall time but not change any metric.

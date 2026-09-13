@@ -13,9 +13,13 @@ missing and are now generated.
   protocol); confusion matrices square and sum to test sizes; one shared
   train/test split per dataset across CNN and baseline cells; CSV agrees with
   every JSON; values sit inside the predicted bands (breast 95.0-97.2,
-  dry bean 90.3-94.0, adult 57.6-69.0 CNN vs XGB 71.43); headline adult
-  naive+pretrained 57.58 / -11.40 pp negative transfer confirmed
-  (professor-validation.md sections 9-12).
+  dry bean 90.3-94.0, adult 57.6-69.0 CNN vs XGB 71.43).
+- **The headline adult naive+pretrained result did NOT survive its own check
+  (2026-09-13).** The recorded single run (57.58 %, -11.40 pp) was a
+  barely-trained checkpoint (best epoch 2/50) and the five-seed repeat gives
+  68.36 +/- 0.82 % with a paired delta of -0.28 pp [-1.55, +0.98] ->
+  UNRESOLVED. The chapter's transfer claim becomes a null result; see
+  critical-audit-findings.md, post-run validation (V1) and C8.
 - **Draft chapter 6 tables** match all_experiments.csv cell-for-cell (39/39
   checked, 0 mismatches).
 - **Code quality.** No TODO/FIXME/XXX markers anywhere under src/; all modules

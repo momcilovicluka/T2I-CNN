@@ -642,13 +642,59 @@ Every point below was reproduced against the code, not merely re-read.
   estimate of the main-table cell.
 - 12.2's "deterministic (seed 42)" for the adult naive/pretrained cell is
   therefore also unsupported until that cell is repeated across seeds (C8).
+  RESOLVED (2026-09-13, see 12.3c): the repeats were run, and the cell turned
+  out worse than non-deterministic — its recorded value is an early-checkpoint
+  artefact and the transfer claim it carried does not survive.
 - The overlap-diagnostics figure labelled only the naive bars (the post-loop
   `zip(ax.patches, of_vals)` paired all 12 bars with the last method's values)
   and IGTD/naive OF/OP were hard-coded rather than measured; both are fixed in
   `src/visualize.py` and `src/t2i/overlap_metrics.py` (items C2, C5).
 
+### 12.3c OUTCOME (2026-09-13) — post-run validation, after Phases 1-3 ran
+
+The Colab run executed every Phase 1-3 item. All results, figures and documents
+were then re-validated against the code and against the audit's own predictions.
+
+- **C8 is confirmed, not merely suspected.** `adult_income/naive/resnet` records
+  F1 57.58 % from a checkpoint selected at **epoch 2 of 50**: validation loss
+  oscillates 0.58 -> 3.88 at lr 1e-3 and early stopping froze the second epoch.
+  Five repeats of the identical configuration give 68.36 +/- 0.82 % (accuracy
+  80.97 +/- 1.62, balanced accuracy 81.59 +/- 0.64), and the paired
+  pretrained-minus-scratch difference is **-0.28 pp [-1.55, +0.98] ->
+  UNRESOLVED**. The "64.70 % is below the 75.2 % majority rate" reading
+  inverts — the cell is comfortably above it. There is no measured negative
+  transfer on Adult/naive: the transfer finding is a null result, consistent
+  with the LP-FT ablation.
+- **The sweep's other claims stand.** naive vs TINTO on Adult, paired over the
+  same seeds: +2.15 pp [+1.54, +2.76] -> resolved, so the collision-cost finding
+  survives with an interval rather than a bare point estimate.
+- **C1 verified on the real run**: DeepInsight gives 96.45 / 93.37 / 66.53 %
+  identically for all four orderings. The naive panel separates (94.37-97.22 /
+  93.58-94.33 / 68.31-69.04) but with no consistent direction and a spread only
+  ~2x the seed sd on two datasets: sensitivity to input order, not a directional
+  ordering effect.
+- **C3 verified**: both pixel-shuffle arms exist and arm B returns to the
+  original level on every dataset (95.71 / 93.50 / 66.28 %), so "marginals are
+  sufficient" is supported by the data rather than asserted.
+- **Two artefact-level gaps were found and closed**: the C6 backfill had never
+  been applied to the 36 grid JSONs, and `all_experiments.csv` shipped with only
+  its 9 baseline rows. Both are now guarded inside
+  `run_all.py::aggregate_results`, so neither can recur silently.
+- **Three figure defects**: `ch4_density_vs_performance.png` still carried the
+  pre-C6 "Macro-F1 (%)" axis; the pixel-shuffling figure drew only arm A while
+  the JSON conclusion is derived from arm B; the LP-FT figure hard-coded
+  "Macro-F1". All three are fixed (arm B and error bars are now drawn).
+- **New tooling**: `scripts/audit_cells.py` (a no-retraining screen for
+  early-checkpoint and below-majority cells), `scripts/stability_table.py` (the
+  separate stability table), and `run_all.py --cells/--force`, which backs a
+  superseded JSON up to `results/backup_pre_rerun/` before re-running it.
+
 ### 12.4 Verdict
-The complete result set validates clean and sits inside every predicted band.
-Paper numbers should be quoted exclusively from `all_experiments.csv` + the
-45 cell JSONs; ablation and figure chains add no new information beyond what
-sections 12.2/12.3 record. Nothing requires a re-run or deletion.
+The result set validates clean and sits inside every predicted band, with one
+exception: the headline negative-transfer cell (12.3c), whose recorded value is
+an artefact of checkpoint selection rather than a property of the
+configuration. Quote paper numbers from `all_experiments.csv` + the 36 grid
+JSONs, and quote the claim-bearing cells from `results/stability_table.md`
+instead. Sections 12.2/12.3 are superseded by 12.3b/12.3c wherever they conflict.
+One re-run is outstanding: the flagged cell, three times at seed 42 with the
+split held at 42, so the artefact is recorded explicitly in the audit trail.

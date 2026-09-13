@@ -56,7 +56,7 @@ remain findable after the edits.
 | Item | Change made | State | Still required |
 |------|-------------|-------|----------------|
 | C1 | `src/ablation.py`: new `correlation_order()`; `reorder_features(..., perm=)`; `run_feature_ordering_ablation` computes ONE train permutation and applies it to all splits; ordering JSON gains `ordering_note` + `correlation_perm`. `src/visualize.py` figure footnote rewritten. Draft §6.6/§7/§8 rewritten. | done | Re-run 3 ordering ablations; confirm four identical bars; regenerate `ch4_ablation_feature_ordering.png` |
-| C3 | `src/ablation.py`: pixel-shuffle gains arm B (train shuffled → test shuffled) with `shuffled_train_f1` / `retrain_drop`; `conclusion` now keys on arm B. Draft §6.6/§7/§8 restructured into arm A / arm B. *(2026-09-12: the two abstracts, §4.7 item 1 and the chapter-5 listing commentary still carried the arm-A-only inference — "a drop proves the CNN uses the spatial arrangement" — and were qualified too.)* | done | Re-run 3 pixel-shuffle ablations; fill the `[UNETI ...]` numbers |
+| C3 | `src/ablation.py`: pixel-shuffle gains arm B (train shuffled → test shuffled) with `shuffled_train_f1` / `retrain_drop`; `conclusion` now keys on arm B. Draft §6.6/§7/§8 restructured into arm A / arm B. *(2026-09-12: the two abstracts, §4.7 item 1 and the chapter-5 listing commentary still carried the arm-A-only inference — "a drop proves the CNN uses the spatial arrangement" — and were qualified too.)* | done | Re-run done; arm-B numbers filled in the draft (§6.6) and both arms drawn in the figure |
 | C4 | `src/ablation.py`: LP-FT JSON gains `seed`, `direct_ft_config`, `lpft_config`, `arm_note`. `professor-validation.md` §12.3b correction added; draft LP-FT caveat added. | done | Re-run 3 LP-FT ablations and reconcile 98.63 vs 97.22 |
 | C2 | `src/visualize.py`: OF/OP annotations moved inside the per-method loop; ylim computed across all methods. | done | Regenerate `ch4_overlap_diagnostics.png` |
 | C5 | `src/t2i/overlap_metrics.py`: IGTD OF/OP measured from its fitted coordinates; naive annotated (`note`, `n_active_pixels` = D). | done | Regenerate the overlap figure |
@@ -177,7 +177,7 @@ What it buys is turning those limitations into measurements.
 
 | Item | Change made | State | Still required |
 |------|-------------|-------|----------------|
-| C7/C8 | New `scripts/seed_sweep.py`. It repeats the 7 claim-bearing cells over seeds 42–46 by calling the **same** `run_all.run_single_experiment`, so the training path is provably identical and nothing is duplicated; results go to `results/seeds/seed<N>/` so the recorded seed-42 grid is never touched; it prints mean ± sample sd per cell plus a delta ± 2 se verdict for each *claimed difference*, and writes `results/seed_summary.csv`. `run_single_experiment` gained `seed` and `split_seed`; `run_all.py` gained `--seed`, `--split-seed`, `--output-dir`. Defaults remain 42, so the recorded grid reproduces exactly; every JSON now records `seed`/`split_seed`. | done | Run the sweep in Colab; fill the `[UNETI ...]` placeholders |
+| C7/C8 | New `scripts/seed_sweep.py`. It repeats the 7 claim-bearing cells over seeds 42–46 by calling the **same** `run_all.run_single_experiment`, so the training path is provably identical and nothing is duplicated; results go to `results/seeds/seed<N>/` so the recorded seed-42 grid is never touched; it prints mean ± sample sd per cell plus a delta ± 2 se verdict for each *claimed difference*, and writes `results/seed_summary.csv`. `run_single_experiment` gained `seed` and `split_seed`; `run_all.py` gained `--seed`, `--split-seed`, `--output-dir`. Defaults remain 42, so the recorded grid reproduces exactly; every JSON now records `seed`/`split_seed`. | done | Sweep run in Colab; placeholders filled; outcome recorded in the C8 resolution and Phase 4 |
 | C7 (`cross_validate`) | Decision: **keep, explicitly marked**. The train.py header note now states the variance requirement it was written for is served by `seed_sweep.py`. Wiring it into a `--cv` path would duplicate what the sweep already does via the identical training path, and it retrains 5 folds per cell. | done | — |
 | C11 | `run_all.py` gained the `SCRATCH_3CH` flag + `--scratch-3ch`. With it on, `resnet_scratch` is built with `input_channels=3` (conv1 architecture-identical to the pretrained arm) plus `force_imagenet_norm`. Normalisation is now decided by **one** predicate, `src/train.uses_imagenet_normalization()`, shared by `train_model`, `evaluate_model` and `generate_gradcam` — previously three independent `getattr(model, 'pretrained', False)` checks that could silently disagree, which is exactly the failure mode that would have made the control arm look fine while scoring un-normalised test images. | done | Back up the 12 `resnet_scratch` JSONs, then re-run those 12 cells with the flag |
 | C1 add-on | `src/visualize.py`: the feature-ordering figure now keys on `(dataset, method)` and draws one panel per method, so the naive run appears beside DeepInsight. This also fixed a **latent bug**: the old `by_ds = {r['dataset']: r}` silently dropped one method once two existed, so the naive control would have overwritten the DeepInsight bars in the figure. The footnote is conditional on which panels are present. | done | Run `--t2i naive`; regenerate the figure |
@@ -305,6 +305,42 @@ python -m src.colab_sync
 
 That exits non-zero when the sync directory is unset, deliberately: in a `%%bash`
 cell it stops you from believing a session was backed up when it was not.
+
+---
+
+## Phase 4: post-run validation (2026-09-13) — what the Colab run actually produced
+
+Every Phase 1-3 item was executed in Colab and the whole result tree, all 30
+figures and every `Plan/*.md` were re-validated against the code. The audit items
+below are closed; the V-items are new findings from that validation pass.
+
+| V | Finding | Severity | Status |
+|---|---|---|---|
+| V1 | `adult_income/naive/resnet`: recorded single run (57.58 %, best checkpoint epoch 2/50) contradicts the five-seed repeat (68.36 ± 0.82 %). The −11.40 pp negative-transfer headline does not survive. | CRITICAL | C8 resolution above; draft + figures re-worded; targeted re-run outstanding |
+| V2 | The C6 backfill was never applied: none of the 36 grid JSONs carry `f1_macro_all` / `balanced_accuracy`. | HIGH | Run `scripts/backfill_metrics.py --write`; guarded in `aggregate_results` |
+| V3 | `results/all_experiments.csv` contained only the 9 baseline rows (written while the grid JSONs were absent). | HIGH | Re-run `run_all.py --aggregate`; now refuses to write a CNN-less CSV |
+| V4 | `ch4_density_vs_performance.png` still carried the pre-C6 `Macro-F1 (%)` axis although the code writes `F1_LABEL[dataset]` (verified by reading the PNG). | MEDIUM | Regenerate (code already correct) |
+| V5 | `ch4_ablation_pixel_shuffling.png` drew only arm A, while the JSON `conclusion` and draft §6.6 rest on arm B. | MEDIUM | Fixed: three series + the stored conclusions |
+| V6 | `ch4_ablation_lpft.png` hard-coded `Macro-F1 (%)` for datasets whose stored F1 is positive-class. | MEDIUM | Fixed: `F1 (%)` + metric footnote |
+| V7 | The naive ordering panel separates, but by ~0.7 pp on Adult/Dry Bean against a seed sd of 0.36/0.37 pp, and with no consistent direction (`random` best on Breast, `reversed` on Adult). | MEDIUM | Footnote + §7 re-worded as sensitivity, not a directional effect |
+
+**Additions made in this phase (code).** `src/train.py` now records
+`best_epoch`, `best_val_loss`, `epochs_run`, `stopped_early`,
+`val_loss_oscillation` and `device`; `run_all.py` surfaces them in the JSON,
+gained `--cells` / `--force` (with an automatic backup of the superseded JSON to
+`results/backup_pre_rerun/`), and `aggregate_results` now warns on stale-schema
+rows and refuses to write a baselines-only CSV; `scripts/audit_cells.py` screens
+every cell for the V1 pattern without retraining; `scripts/stability_table.py`
+builds the separate stability table; `src/visualize.py` draws both shuffle arms,
+uses honest F1 labels, wraps long footnotes, and adds ±2 se error bars to the
+transfer-Δ figure for the swept pairs.
+
+**Still open after this phase.** C3's `[UNETI ...]` placeholders in the draft
+(filled by this pass), C4's wording sweep (done in `professor-validation.md`
+12.3b/12.3c), C6's backfill (V2), C10/V4's figure regeneration, C13/C20's
+chapter-5 code note, C15's Grad-CAM caption wording ("the map explains the true
+class"), C16's `requirements-lock.txt` (generate on the final Colab session),
+and C21's decision on the SLR `.docx`.
 
 ---
 
@@ -743,6 +779,21 @@ error bars; if it is large, reframe to "unstable on this configuration".
 
 **Re-run required: YES.** 5 trainings of pretrained ResNet-18 on adult
 (~20–28 min each) → **~2 h**, or ~1 h if run on GPU.
+
+**RESOLUTION (2026-09-13) — the pessimistic branch is the true one.** The
+sweep was run. The repeats do not scatter around 57.58 %; they are tight and far
+from it: 68.36 ± 0.82 % (accuracy 80.97 ± 1.62, balanced accuracy
+81.59 ± 0.64), with the paired pretrained-minus-scratch difference at
+**−0.28 pp [−1.55, +0.98] → UNRESOLVED**. The stored history explains it: the
+validation loss of the recorded run oscillates 0.58 → 3.88 at lr 1e-3 and early
+stopping kept the best checkpoint at **epoch 2 of 50**, so the reported model
+had barely trained and its accuracy (64.70 %) fell below the 75.2 % majority
+rate. The cell is a checkpoint-selection artefact, not a transfer effect.
+Consequences: the chapter's headline negative-transfer claim is withdrawn (it
+becomes a null result, consistent with LP-FT), the cell's recorded value is
+replaced in the text by the five-seed value, and `scripts/audit_cells.py` was
+added so the same pattern cannot hide in the other 35 cells (it flags exactly
+this one, and no other claim-bearing cell).
 
 ---
 

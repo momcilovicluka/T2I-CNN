@@ -1,0 +1,14 @@
+== heatmap: 
+== baseline: Baseline Comparison: Tabular vs CNN+T2I
+== perclass_f1: F1-Score
+== train_curves: Epoch | Loss | Loss (train: dashed, val: solid) | Validation Accuracy
+== confusion: Predicted | True | Confusion Matrices — Best CNN per Dataset
+== density_perf: T2I Method | F1 (pozitivna klasa za BC/Adult; makro-F1 za Dry Bean) | Classification Performance by T2I Method and Architecture (per-dataset feature density annotated in panel titles)
+== class_dist: Count | Class Distribution Across Datasets
+== runtime: Total Time (s)
+== roc: False Positive Rate | True Positive Rate | ROC Curves — Best CNN per T2I Method
+== transfer_delta: Δ F1 (pretrained − scratch, pp) | Transfer Learning Effect: ResNet-18 pretrained vs from scratch | y-error bars = ±2 se over seeds 42–46 for the pairs repeated in seed_summary.csv; unbarred bars are single runs | footnote lists which pairs are seeded
+== overlap: Overlapped Features (%) | Feature Overlap (OF) | Overlapped Pixels (%) | Pixel Overlap (OP) | T2I Image Quality: Feature and Pixel Overlap Diagnostics
+== shuffle: F1 (%) | Ablation: Pixel Shuffling (DeepInsight + ShallowCNN) | original layout | A: trained original, tested shuffled | B: trained shuffled, tested shuffled | footnote: arm A = distribution shift, arm B = does the layout carry information; stored conclusions printed per dataset
+== ordering: F1 (%) | Ablation: Feature Ordering (one train-derived column permutation, audit C1) | panel per T2I method (DeepInsight, naive) | original, random, correlation, reversed | footnote: DeepInsight bars coincide (invariance); naive bars separate but the spread (~0.7–2.9 pp) is at seed-noise level and has no consistent direction
+== lpft: F1 (%) | Ablation: LP-FT vs Direct Fine-Tuning (ResNet-18 pretrained) | direct FT vs LP-FT | y label is F1 (%), not Macro-F1: positive-class F1 for breast/adult, macro for dry_bean (audit C6)
