@@ -54,7 +54,7 @@ sys.path.insert(0, str(REPO_ROOT))
 # The cells whose differences are actually quoted in the draft. Widen or narrow
 # with --cells; there is no point spending seeds on cells nobody compares.
 DEFAULT_CELLS = [
-    'adult_income/naive/resnet',          # headline: negative transfer, the one cell the chapter leans on
+    'adult_income/naive/resnet',          # the transfer claim used to lean on this cell's single run
     'adult_income/naive/resnet_scratch',  # its from-scratch counterpart (-11.40 pp claim)
     'adult_income/naive/shallow',         # third arm of the same three-way comparison
     'adult_income/tinto/shallow',         # "TINTO/DeepInsight below naive on Adult" claim
@@ -65,8 +65,12 @@ DEFAULT_CELLS = [
 
 # Pairs whose DIFFERENCE is the claim, not whose absolute value is.
 COMPARISONS = [
+    # NOTE (2026-09-13): the recorded single run of the first cell reported
+    # -11.40 pp "negative transfer"; over five seeds the paired difference is
+    # -0.28 pp [-1.55, +0.98] -- UNRESOLVED. The label states the comparison,
+    # not a conclusion, so the sweep cannot be read as confirming one.
     ('adult_income/naive/resnet', 'adult_income/naive/resnet_scratch',
-     'pretrained vs from-scratch ResNet on Adult/naive (negative transfer)'),
+     'pretrained vs from-scratch ResNet on Adult/naive'),
     ('adult_income/naive/shallow', 'adult_income/tinto/shallow',
      'naive vs TINTO on Adult with ShallowCNN (collision cost)'),
 ]
