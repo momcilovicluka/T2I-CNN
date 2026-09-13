@@ -19,6 +19,10 @@ whether the conclusion depends on the particular partition).
 
 Usage (from the repository root):
 
+    # Colab: use %cd (a `!cd` line does NOT persist to the next `!` line,
+    # so `!python scripts/...` would then run in the wrong directory).
+    %cd /content/T2I-CNN
+
     # dry run: show what would run and what it costs
     python scripts/seed_sweep.py --dry-run
 
@@ -127,6 +131,12 @@ def main():
                         help='root output directory (default: results/seeds)')
     parser.add_argument('--dry-run', action='store_true',
                         help='print the plan without training anything')
+    parser.add_argument('--force', action='store_true',
+                        help='retrain even when a complete result JSON already '
+                             'exists (default: skip finished cells)')
+    parser.add_argument('--no-restore', action='store_true',
+                        help='do not copy the $RESULTS_SYNC_DIR mirror back '
+                             'into results/ before checking what is done')
     args = parser.parse_args()
 
     cells = parse_cells(args.cells)
@@ -136,9 +146,21 @@ def main():
 
     import run_all
     from run_all import DATASET_CONFIG, run_single_experiment, _experiment_is_done
-    from src.colab_sync import describe, sync_path
+    from src.colab_sync import describe, get_sync_dir, restore, sync_path
 
     print(describe())
+
+    # Colab VMs are ephemeral: a previous session's results live only in the
+    # $RESULTS_SYNC_DIR mirror (Drive). Without pulling them back first, the
+    # local results/seeds/ tree looks empty and every cell retrains "from the
+    # beginning" even though the work is already done. Restore once at startup
+    # so the cached checks below see the full history. Existing local files
+    # win over the mirror, so a partial local run is never clobbered.
+    if not args.no_restore and get_sync_dir() is not None:
+        copied, kept = restore(dest='results')
+        if copied or kept:
+            print(f'[restore] copied {copied}, kept {kept} existing file(s) '
+                  f'from the mirror')
 
     # Validate early: a typo here would otherwise fail after the first training.
     for dataset, t2i, arch in cells:
@@ -156,27 +178,47 @@ def main():
     print(f'Cells ({len(cells)}):')
     for c in cells:
         print(f'  {" / ".join(c)}')
-    print(f'\nTotal runs: {len(cells) * len(seeds)}')
+    print(f'\nTotal runs: {len(cells) * len(seeds)}', end='')
+    if args.force:
+        print(' (--force: retraining everything)')
+    else:
+        print(' (finished cells are skipped)')
     if args.dry_run:
+        todo = cached = 0
         for seed in seeds:
             for cell in cells:
                 out = Path(args.out) / f'seed{seed}'
-                done = _experiment_is_done(out / f'{cell[0]}_{cell[1]}_{cell[2]}.json')
-                print(f'  seed {seed}: {"/".join(cell)}{"  (cached)" if done else ""}')
-        print('\nDRY RUN — nothing trained.')
+                if args.force:
+                    done = False
+                else:
+                    done = _experiment_is_done(out / f'{cell[0]}_{cell[1]}_{cell[2]}.json')
+                cached += bool(done)
+                todo += (not done)
+                print(f'  seed {seed}: {"/".join(cell)}{"  (cached — will skip)" if done else ""}')
+        print(f'\nDRY RUN — nothing trained. {todo} to run, {cached} cached (skipped).')
+        if todo == 0:
+            print('ALL CACHED — nothing to do.')
         return 0
 
     rows = {}
+    skipped = ran = 0
     for seed in seeds:
         out_dir = Path(args.out) / f'seed{seed}'
         out_dir.mkdir(parents=True, exist_ok=True)
+        # Drop stale partial writes from a killed run so they can never be
+        # mistaken for results (run_single_experiment writes atomically, but
+        # an old .tmp from an earlier version may still linger).
+        for tmp in out_dir.glob('*.json.tmp'):
+            print(f'  Cleaning up partial file: {tmp.name}')
+            tmp.unlink()
         for cell in cells:
             dataset, t2i, arch = cell
             key = '/'.join(cell)
             result_file = out_dir / f'{dataset}_{t2i}_{arch}.json'
 
-            if _experiment_is_done(result_file):
-                print(f'  [seed {seed}] {key} — cached')
+            if not args.force and _experiment_is_done(result_file):
+                print(f'  [seed {seed}] {key} — cached, skipping')
+                skipped += 1
             else:
                 print(f'\n{"=" * 70}\n  [seed {seed}] {key}\n{"=" * 70}')
                 try:
@@ -193,10 +235,16 @@ def main():
                     import traceback
                     traceback.print_exc()
                     continue
+                ran += 1
 
-            with open(result_file) as f:
-                rows[(key, seed)] = json.load(f)
+            try:
+                with open(result_file) as f:
+                    rows[(key, seed)] = json.load(f)
+            except (OSError, json.JSONDecodeError) as exc:
+                print(f'  WARNING: could not read {result_file.name}: {exc}')
+                continue
 
+    print(f'\nSweep done: {ran} trained, {skipped} skipped (cached).')
     if not rows:
         sys.exit('No results collected.')
 
