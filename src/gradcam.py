@@ -6,9 +6,10 @@ making predictions. This directly answers: "Does the CNN actually
 use the spatial structure created by T2I methods?"
 
 NOTE: Grad-CAM works best with ShallowCNN (4x4 feature maps at 32x32).
-ResNet-18 on 32x32 produces only 2x2 maps at layer4 — we use layer3
-instead (4x4 maps), but the resolution is still limited. For the paper,
-Grad-CAM results for ShallowCNN are most interpretable.
+For ResNet-18 on a 32x32 input the measured feature-map sizes are
+layer1 8x8, layer2 4x4, layer3 2x2, layer4 1x1 — layer4 is unusable and
+layer3 is nearly so, so we take layer2 (4x4). For the paper, Grad-CAM
+results for ShallowCNN are the most interpretable.
 
 Usage:
     from src.gradcam import generate_gradcam, overlay_heatmap
@@ -28,14 +29,16 @@ def get_target_layer(model, arch):
     while still retaining spatial information.
 
     ShallowCNN: features[8] is the last Conv2d (128 channels, 4x4 spatial)
-    ResNet-18: layer3[-1].conv2 (256 channels, 4x4 spatial at 32x32 input)
+    ResNet-18: layer2[-1].conv2 (128 channels, 4x4 spatial at 32x32 input)
     """
     if arch == 'shallow':
         return model.features[8]
     elif arch in ('resnet', 'resnet_scratch'):
-        # Use layer3 instead of layer4 — layer4 produces 2x2 maps on 32x32
-        # layer3 produces 4x4 maps which are still small but better
-        return model.backbone.layer3[-1].conv2
+        # Use layer2 instead of layer4 — at a 32x32 input layer4 produces
+        # 1x1 maps and layer3 2x2 maps; layer2 produces 4x4, which is the
+        # largest spatial resolution still carrying class-discriminative
+        # activations for this input size.
+        return model.backbone.layer2[-1].conv2
     else:
         raise ValueError(f"Grad-CAM not supported for architecture: {arch}")
 

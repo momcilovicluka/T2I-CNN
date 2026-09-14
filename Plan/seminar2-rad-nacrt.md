@@ -1162,9 +1162,12 @@ Dve vrste koda pokazuju kako se proverava da mreža *zaista koristi* prostornu
 strukturu T2I slika.
 
 **Grad-CAM.** Toplotna mapa pokazuje koji pikseli najviše doprinose odluci.
-Izbor ciljnog sloja zavisi od arhitekture (Listing 5.10): kod ResNet-a se ne
-uzima poslednji blok (`layer4`), jer na ulazu 32×32 on daje karte svega 2×2 —
-neupotrebljivo male; `layer3` daje 4×4 karte.
+Izbor ciljnog sloja zavisi od arhitekture (Listing 5.10): na ulazu 32×32
+ResNet-18 daje karte veličine 8×8 (`layer1`), 4×4 (`layer2`), 2×2 (`layer3`) i
+1×1 (`layer4`) — poslednja dva bloka su neupotrebljivo mala, pa se koristi
+`layer2` kao najkrupnija rezolucija koja još nosi klasno diskriminativne
+aktivacije. Kod ShallowCNN-a `features[8]` daje 4×4, pa se Grad-CAM slike u
+radu generišu tom arhitekturom (najčitljivije mape).
 
 ```
 def get_target_layer(model, arch):
@@ -1172,9 +1175,11 @@ def get_target_layer(model, arch):
     if arch == 'shallow':
         return model.features[8]
     elif arch in ('resnet', 'resnet_scratch'):
-        # Use layer3 instead of layer4 — layer4 produces 2x2 maps on 32x32
-        # layer3 produces 4x4 maps which are still small but better
-        return model.backbone.layer3[-1].conv2
+        # Use layer2 instead of layer4 — at a 32x32 input layer4 produces
+        # 1x1 maps and layer3 2x2 maps; layer2 produces 4x4, which is the
+        # largest spatial resolution still carrying class-discriminative
+        # activations for this input size.
+        return model.backbone.layer2[-1].conv2
     else:
         raise ValueError(f"Grad-CAM not supported for architecture: {arch}")
 ```
@@ -1377,7 +1382,7 @@ Porede se `resnet` (pretrenirani, 3-kanalni ImageNet normalizovan ulaz) i `resne
   generisana je mreža panela — redovi su četiri T2I metode, a kolone originalna slika, prekrivena slika
   (overlay) i sama toplotna mapa; model je ShallowCNN treniran za datu metodu, jer njegovi standardni
   konvolucioni slojevi daju najčitljivije mape (§5.11). Mapa pokazuje na kojim pikselima se zasniva
-  odluka *tačne* klase primera (Grad-CAM se računa u odnosu na stvarnu klasu, ne na predikciju — §5.11):
+  odluka koju je model doneo za taj primer (Grad-CAM se računa u odnosu na *predviđenu* klasu — §5.11):
   kada CNN koristi prostorni raspored, aktivacije se grupišu oko informativnih koordinata
   atributa, a nakon mešanja piksela (Slika 6.2, krak A) takva struktura nestaje — uz napomenu da
   krak B pokazuje da isti rezultat postiže i model treniran na permutovanom rasporedu (§6.6).   Kvantitativno čitanje aktivacija (ista procedura i isti uzorci kao na slici;
