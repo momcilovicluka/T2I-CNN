@@ -1,8 +1,8 @@
 # Seminar 2 — Nacrt seminarskog rada
 
 > **Status nacrta: 4. septembar 2026.** Brojčani rezultati u poglavlju 6 popunjeni
-> su iz finalne serije eksperimenata (36 CNN + 9 baselajna ćelija, CPU na Google
-> Colab-u; `results/all_experiments.csv`) i pokrivaju glavnu seriju i ablacije;
+> su iz finalne serije eksperimenata (36 CNN + 9 baselajna ćelija, Google Colab,
+> jedan runtime; `results/all_experiments.csv`) i pokrivaju glavnu seriju i ablacije;
 > Poglavlja 6–8 popunjena su rezultatima, diskusijom i zaključkom — bez preostalih
 > **TBD** mesta; ostaje konačno uređivanje teksta i sređivanje referenci iz
 > `Notebook/references.bib`.
@@ -45,8 +45,8 @@ baselajne (Random Forest, XGBoost, MLP) i tri ablacije (mešanje piksela,
 raspored atributa, LP-FT). Eksperimenti su izvedeni po jedinstvenom protokolu
 (jedna stratifikovana podela, fiksni hiperparametri, deterministički seed).
 Rezultati pokazuju da CNN+T2I na skupovima sa umerenim brojem atributa
-dostižu nivo klasičnih metoda (na Breast Cancer 97,22 % naspram RF 96,55 %
-F1 pozitivne klase), dok na Adult Income XGBoost nadmašuje sve CNN+T2I
+dostižu nivo klasičnih metoda (na Breast Cancer 97,22 % naspram 95,83 %
+F1 pozitivne klase kod najboljeg baselajna, XGBoost-a), dok na Adult Income XGBoost nadmašuje sve CNN+T2I
 kombinacije (71,43 % naspram 68,98 %) — posledica gubitne konverzije
 visokodimenzionalnih one-hot obeležja. Mešanje piksela obara makro-F1 na Dry
 Bean za 85,21 pp — model treniran na originalnom rasporedu ne prenosi se na
@@ -59,8 +59,9 @@ iznosi −0,28 pp; LP-FT gubi od direktnog finog podešavanja. Ključne ćelije
 koje nose tvrdnje ponovljene su kroz pet semena (§4.6, §6.7): razlike su
 tada date kao srednja vrednost ± sd, a jedina uparena razlika koja se
 razlikuje od šuma je prednost naivnog rasporeda nad TINTO-om na Adult
-Income (+2,15 pp). Prostorni raspored jeste relevantan, ali je njegov uticaj
-manji od izbora arhitekture i režima treninga.
+Income (+2,15 pp). Prostorni raspored jeste relevantan, ali je informacija koju
+nosi sam raspored piksela izmerljivo mala (razlike ≤ 0,74 pp), pa je zato manja
+i od uticaja izbora arhitekture i od uticaja pretreniranosti.
 
 **Ključne reči:** konverzija tabelarnih podataka u slike, T2I, DeepInsight,
 TINTO, IGTD, konvolucione neuronske mreže, transfer učenje, XGBoost,
@@ -81,8 +82,8 @@ XGBoost, MLP) and three ablations (pixel shuffling, feature ordering, LP-FT).
 All experiments follow a single protocol (one stratified split, fixed
 hyperparameters, deterministic seed). The results show that CNN+T2I pipelines
 reach the level of classical methods on datasets with a moderate number of
-features (97.22% vs. 96.55% positive-class F1 over Random Forest on Breast
-Cancer), while on Adult Income XGBoost beats every CNN+T2I combination
+features (97.22% vs. 95.83% positive-class F1 for the best baseline, XGBoost,
+on Breast Cancer), while on Adult Income XGBoost beats every CNN+T2I combination
 (71.43% vs. 68.98%) — a consequence of the lossy conversion of
 high-dimensional one-hot features. Pixel shuffling drops macro-F1 on Dry Bean by
 85.21 pp — a model trained on the original layout does not transfer to a
@@ -94,8 +95,9 @@ every dataset and method, and on Adult Income with naive images it is −0.28 pp
 LP-FT underperforms direct fine-tuning. The claim-bearing cells were repeated
 over five seeds (§4.6, §6.7) and are reported as mean ± sd; the only paired
 difference that clears its interval is the naive-over-TINTO advantage on Adult
-Income (+2.15 pp). Spatial arrangement matters, yet less than the choice of
-architecture and training regime.
+Income (+2.15 pp). Spatial arrangement matters, yet the information the pixel
+layout itself carries is small (differences ≤ 0.74 pp), hence smaller than both
+the choice of architecture and the effect of pretraining.
 
 **Keywords:** tabular-to-image conversion, T2I, DeepInsight, TINTO, IGTD,
 convolutional neural networks, transfer learning, XGBoost, classification
@@ -653,8 +655,10 @@ slikama; u tekstu se navode sirove razlike.
 
 Implementacija: Python, PyTorch, TINTOlib 1.3.1 (DeepInsight/IGTD/TINTO),
 torchvision/timm (pretrenirani modeli), scikit-learn/XGBoost (baselajni).
-Eksperimenti izvršeni na CPU (Google Colab, bez GPU akceleracije), uz merenje vremena treninga
-po eksperimentu. Rezultati se upisuju atomski (`.tmp` + rename), a nastavak
+Eksperimenti su izvršeni u Google Colab-u, na CUDA uređaju (zapis `device` beleži
+`cuda` u svim ćelijama u kojima je to polje prisutno), uz merenje vremena treninga
+po eksperimentu.
+Rezultati se upisuju atomski (`.tmp` + rename), a nastavak
 prekinutog izvršavanja prepoznaje kompletne JSON fajlove i pokreće samo
 nedostajuće eksperimente; iskvareni fajlovi se automatski ponovo rade.
 
@@ -1263,11 +1267,11 @@ Mali binarni skup (398 trening, 114 test primera); F1 se odnosi na pozitivnu kla
 | DeepInsight | 96,45 (95,61) | 97,22 (96,49) | 96,50 (95,61) |
 | IGTD | 96,60 (95,61) | 96,00 (94,74) | 95,83 (94,74) |
 
-Baselajni za poređenje (F1/tačnost): RF 96,55 (95,61), XGBoost 95,83 (94,74), MLP 94,52 (92,98).
+Baselajni za poređenje (F1/tačnost): RF 95,10 (93,86), XGBoost 95,83 (94,74), MLP 94,52 (92,98).
 
 - Sve CNN ćelije leže u rasponu 95,04–97,22 % F1 (tačnost 93,86–96,49 %); najbolja je TINTO + ResNet-18 od nule sa F1 97,22 % (tačnost 96,49 %). ROC AUC iznosi 0,986–0,996 (`ch4_roc_curves.png`).
 
-- Konverzija u sliku gubi malo na 30 atributa: najbolja CNN ćelija je za +0,67 pp iznad RF baselajna (96,55), a XGBoost (95,83) i MLP (94,52) dostižu nivo najboljih CNN ćelija (slika `ch4_baseline_comparison.png`).
+- Konverzija u sliku ne gubi na 30 atributa: najbolja CNN ćelija je za +1,39 pp iznad najboljeg baselajna (XGBoost 95,83), dok RF (95,10) i MLP (94,52) ostaju na nivou najboljih CNN ćelija ili ispod njega (slika `ch4_baseline_comparison.png`).
 
 - Rang metoda zavisi od arhitekture (npr. DeepInsight 97,22 na pretreniranom ResNet-18, a 96,50 od nule), a razlike su unutar ~2 pp — uz jednu podelu, rangiranje čitati deskriptivno.
 
@@ -1286,11 +1290,11 @@ Višeklasni skup (7 klasa, 9527 trening / 2723 test); prati se makro-F1 i po-kla
 | DeepInsight | 93,53 (92,32) | 93,79 (92,69) | 93,28 (92,18) |
 | IGTD | 92,28 (90,93) | 90,33 (88,73) | 91,30 (89,79) |
 
-Baselajni (F1/tačnost): RF 93,48 (92,32), XGBoost 93,91 (92,69), MLP 93,46 (92,40).
+Baselajni (F1/tačnost): RF 93,10 (91,81), XGBoost 93,91 (92,69), MLP 93,46 (92,40).
 
 - Sve metode dostižu 90,33–93,99 % makro-F1 (tačnost 88,73–92,80 %), što odgovara literaturnom plafonu za ovaj skup (RF/XGBoost ~92–93 %). Najbolja ćelija jeste naivna + ShallowCNN (93,99 %).
 
-- IGTD je dosledno najslabiji (90,33–92,28 %), što se poklapa sa dijagnostikom rasporeda (traka po redosledu, bez kolizija: OF = OP = 0 %, §3.2.6/6.4); razlika prema najboljoj metodi ide do ~3,7 pp.
+- IGTD je dosledno najslabiji (90,33–92,28 %), što se poklapa sa dijagnostikom rasporeda (traka po redosledu, bez kolizija: OF = OP = 0 %, §3.2.6/6.4); razlika prema najboljoj metodi ide do 3,66 pp (naivno + ShallowCNN 93,99 % prema IGTD + pretrenirani ResNet-18 90,33 %).
 
 - Po-klasno, najniži F1 javlja se na klasi SIRA (0,78–0,88 zavisno od ćelije): greške se koncentrišu unutar trija vizuelno bliskih klasa SEKER/DERMASON/SIRA (matrice konfuzije `ch4_confusion_matrices.png`, po-klasni F1 `ch4_per_class_f1_dry_bean.png`); najmanja klasa BOMBAY (3,8 % testa) ne kolabira.
 
@@ -1311,13 +1315,13 @@ Binarni disbalansiran skup (~75:25, 31654 trening / 9045 test); pozitivna klasa 
 
 † Ćelija je zamenjena vrednošću iz ponavljanja kroz pet semena: njen zapisani pojedinačni run (57,58 %) poticao je od checkpointa izabranog u **2. epohi od 50** i kao takav nije predstavnik konfiguracije (§6.7). Ostale ćelije tabele su pojedinačni runovi (seed 42); njihove ponovljene vrednosti su u tabeli stabilnosti, §6.7.
 
-Baselajni (F1/tačnost): RF 67,84 (85,52), XGBoost 71,43 (82,94), MLP 68,51 (81,19) (RF ima najvišu tačnost, 85,52 %).
+Baselajni (F1/tačnost): RF 69,99 (84,27), XGBoost 71,43 (82,94), MLP 68,51 (81,19) (RF ima najvišu tačnost, 84,27 %).
 
 **Glavni nalaz — nema izmerenog negativnog transfera na naivnim slikama.** Pretrenirani ResNet-18 nad naivnim slikama daje F1 **68,36 ± 0,82 %** i tačnost 80,97 ± 1,62 % kroz pet semena; ista arhitektura od nule daje **68,64 ± 0,75 %** (odnosno 68,98 % u glavnoj tabeli). Uparena razlika po semenu je **−0,28 pp** uz interval **[−1,55; +0,98]**, koji sadrži nulu, pa se razlika ne navodi kao nalaz (§6.7). Zapisani pojedinačni run od 57,58 % (tačnost 64,70 %), koji je izgledao kao najveći negativan transfer u studiji, odbačen je kao **artefakt izbora modela**: validacioni gubitak pri stopi 1e-3 osciluje između 0,58 i 3,88, rano zaustavljanje je sačuvalo checkpoint iz 2. epohe, a tačnost tog modela pada ispod većinske klase (75,2 %) — što je simptom netreniranog modela, ne transfera. Provera kroz sve ćelije (`scripts/audit_cells.py`) pokazuje da je to jedina ćelija sa tim uzorkom.
 
 U pozadini je kombinovani efekat pretreniranosti i 3-kanalnog ImageNet normalizovanog ulaza na slikama bez prostorne grupisanosti (napomena u §3.3); odvojen doprinos samog ulaza proveren je kontrolom `--scratch-3ch` (§4.7, §6.6), koja arhitekturi od nule daje isti 3-kanalni normalizovani ulaz: ta kontrola daje 68,61 %, pa se ni ulazni domen ne pokazuje kao uzrok razlike.
 
-- Bez pretreniranosti, naivne slike predstavljaju najbolju metodu na Adult (shallow 68,94 %, od nule 68,98 %), dok TINTO i DeepInsight zaostaju (67,03 / 66,32 % od nule) — konzistentno sa kolizijama atributa iz §6.4; IGTD je između (68,45 % od nule). Efekat metode (~2–3 pp) manji je od efekta arhitekture (do ~3,7 pp na Dry Bean); efekat pretreniranosti je, nakon provere iz §6.7, unutar ±1 pp na svim skupovima.
+- Bez pretreniranosti, naivne slike predstavljaju najbolju metodu na Adult (shallow 68,94 %, od nule 68,98 %), dok TINTO i DeepInsight zaostaju (67,03 / 66,32 % od nule) — konzistentno sa kolizijama atributa iz §6.4; IGTD je između (68,45 % od nule). Na ovom skupu je efekat metode (2,6–2,9 pp, metoda unutar iste arhitekture) **veći** od efekta arhitekture (do 1,95 pp, arhitektura unutar iste metode); efekat pretreniranosti je, nakon provere iz §6.7, unutar ±1 pp na svim skupovima.
 
 - Ni jedna CNN+T2I kombinacija ne nadmašuje XGBoost (71,43 % F1); MLP (68,51 %) stoji na nivou najboljih CNN ćelija. To je očekivan, objavljiv ishod: konverzija 104 one-hot obeležja u 32×32 sliku jeste gubitna (§6.4, §7). ROC AUC iznosi 0,889–0,910.
 
@@ -1327,13 +1331,13 @@ U pozadini je kombinovani efekat pretreniranosti i 3-kanalnog ImageNet normalizo
 
 Baselajni (RF, XGBoost, MLP) trenirani su na istim trening redovima i ocenjeni istom metrikom kao CNN ćelije; koriste balansirane težine klasa, ali nisu podešavani (PART 13b).
 
-- **Breast Cancer:** najbolja CNN ćelija 97,22 % (tinto + ResNet-18 od nule) prema najboljem baselajnu 96,55 % (RF) → razlika +0,67 pp.
+- **Breast Cancer:** najbolja CNN ćelija 97,22 % (tinto + ResNet-18 od nule) prema najboljem baselajnu 95,83 % (XGBoost) → razlika +1,39 pp.
 
 - **Dry Bean:** najbolja CNN ćelija 93,99 % (naivno + ShallowCNN) prema najboljem baselajnu 93,91 % (XGBoost) → razlika +0,08 pp.
 
 - **Adult Income:** najbolja CNN ćelija 68,98 % (naivno + ResNet-18 od nule) prema najboljem baselajnu 71,43 % (XGBoost) → razlika -2,45 pp.
 
-Zaključak: na Breast Cancer i Dry Bean T2I-CNN dostižu nivo baselajna (razlika ±0,7 pp); na Adult Income tabularni baselajni (posebno XGBoost) nadmašuju sve CNN+T2I kombinacije — očekivano s obzirom na gubitnost konverzije kod 104 one-hot obeležja. Ništa u ovom radu ne tvrdi nadmoć nad *podešenim* baselajnom (ograničenja, §7). Slika: `ch4_baseline_comparison.png`.
+Zaključak: na Breast Cancer i Dry Bean T2I-CNN dostižu nivo baselajna (razlika +1,39 pp, odnosno +0,08 pp); na Adult Income tabularni baselajni (posebno XGBoost) nadmašuju sve CNN+T2I kombinacije — očekivano s obzirom na gubitnost konverzije kod 104 one-hot obeležja. Ništa u ovom radu ne tvrdi nadmoć nad *podešenim* baselajnom (ograničenja, §7). Slika: `ch4_baseline_comparison.png`.
 
 ## 6.3 Transfer učenje
 
@@ -1364,9 +1368,9 @@ Porede se `resnet` (pretrenirani, 3-kanalni ImageNet normalizovan ulaz) i `resne
 
 ## 6.4 Dijagnostika slika i vizuelna analiza
 
-- Raspored atributa (Slika 3.1–3.3, `ch3_feature_layout_{dataset}.png`) i sličnost vs. rastojanje (Slika 3.4, `ch4_arrangement_quality.png`): izmerene vrednosti pre eksperimenata (samo trening skup) — Breast Cancer: TINTO $\rho_S = -0{,}36$ i DeepInsight $-0{,}43$ (korelisani atributi blizu; naive $\approx 0$, IGTD traka $\approx 0$); Dry Bean: TINTO $-0{,}37$, DeepInsight $-0{,}29$; Adult Income (104 one-hot obeležja): TINTO i DeepInsight **pozitivno** $\rho_S$ (+0,48 / +0,51) uz 78, odnosno 70 od 104 atributa u koliziji (dele piksel) — gužva na $32	imes32$.
+- Raspored atributa (Slika 3.1–3.3, `ch3_feature_layout_{dataset}.png`) i sličnost vs. rastojanje (Slika 3.4, `ch4_arrangement_quality.png`): izmerene vrednosti pre eksperimenata (samo trening skup) — Breast Cancer: TINTO $\rho_S = -0{,}36$ i DeepInsight $-0{,}43$ (korelisani atributi blizu; naive $\approx 0$, IGTD traka $\approx 0$); Dry Bean: TINTO $-0{,}37$, DeepInsight $-0{,}29$; Adult Income (104 one-hot obeležja): TINTO i DeepInsight **pozitivno** $\rho_S$ (+0,48 / +0,51) uz 86, odnosno 78 od 104 atributa u koliziji (dele piksel) — gužva na $32	imes32$.
 
-- Veza sa rezultatima (§6.1.3): na Adult Income TINTO i DeepInsight (najviše kolizija) postižu niži F1 od naive i IGTD na ShallowCNN i ResNet-18 od nule (66,32–67,03 % prema 68,45–68,98 %), što odgovara gubitku prostorne informacije usled kolizija — ali taj efekat (2–3 pp) ostaje manji od efekta arhitekture (do ~3,7 pp na Dry Bean, §6.3); efekat pretreniranosti je, nakon provere iz §6.7, unutar ±1 pp. Na Breast Cancer i Dry Bean negativna korelacija (slični atributi blizu) ne povlači pad performansi: sve metode dostižu nivo baselajna (§6.2).
+- Veza sa rezultatima (§6.1.3): na Adult Income TINTO i DeepInsight (najviše kolizija) postižu niži F1 od naive i IGTD na ShallowCNN i ResNet-18 od nule (66,32–67,03 % prema 68,45–68,98 %), što odgovara gubitku prostorne informacije usled kolizija — ali taj efekat (2–3 pp) ostaje uporediv sa efektom izbora metode i **veći** od efekta arhitekture (do 1,95 pp, §6.3); efekat pretreniranosti je, nakon provere iz §6.7, unutar ±1 pp. Na Breast Cancer i Dry Bean negativna korelacija (slični atributi blizu) ne povlači pad performansi: sve metode dostižu nivo baselajna (§6.2).
 
 - Gustina i preklapanje, dva nivoa: `t2i_density_comparison.png` je ilustrativna slika -
   mreža primera po metodi i skupu (po jedan primer najčešće klase; udeo piksela sa
@@ -1405,11 +1409,11 @@ Porede se `resnet` (pretrenirani, 3-kanalni ImageNet normalizovan ulaz) i `resne
 
 ## 6.5 Vreme treninga
 
-- Ukupno zidno vreme 36 CNN ćelija na CPU (Google Colab, bez GPU) iznosi ≈ 4,22 h; po skupu: breast ≈ 0,04 h, dry_bean ≈ 0,97 h, adult_income ≈ 3,21 h.
+- Ukupno zidno vreme 36 CNN ćelija iznosi ≈ 4,50 h (jedan Google Colab runtime, jedna verzija koda); po skupu: breast ≈ 0,04 h, dry_bean ≈ 0,97 h, adult_income ≈ 3,50 h.
 
-- Po arhitekturi (medijana po ćeliji; breast / dry_bean / adult): ShallowCNN 4 / 73 / 301 s; ResNet-18 (PT) 11 / 412 / 1384 s; ResNet-18 (od nule) 16 / 435 / 1276 s.
+- Po arhitekturi (medijana po ćeliji; breast / dry_bean / adult): ShallowCNN 4 / 73 / 302 s; ResNet-18 (PT) 11 / 412 / 1465 s; ResNet-18 (od nule) 16 / 435 / 1276 s.
 
-- T2I generacija merena je odvojeno (`t2i_time_sec`): na Adult Income medijana po ćeliji iznosi naive ≈ 2 s, IGTD ≈ 24 s, DeepInsight ≈ 33 s, TINTO ≈ 108 s (TINTO upisuje sliku po primeru, §5.5) — mali udeo u odnosu na trening (ResNet ćelije na Adult traju 20–28 min po ćeliji). Baselajni ostaju zanemarljivi (svaka ćelija < 7 s; ukupno ≈ 22 s).
+- T2I generacija merena je odvojeno (`t2i_time_sec`): na Adult Income medijana po ćeliji iznosi naive ≈ 2 s, IGTD ≈ 24 s, DeepInsight ≈ 33 s, TINTO ≈ 108 s (TINTO upisuje sliku po primeru, §5.5) — mali udeo u odnosu na trening (ResNet ćelije na Adult traju 20–28 min po ćeliji). Baselajni ostaju zanemarljivi (svaka ćelija < 7 s; ukupno ≈ 20,6 s).
 
 - Slika: `ch4_runtime_comparison.png` — ukupno zidno vreme po ćeliji (`total_time_sec`, uniformno prisutno za svih 45 ćelija); krive učenja `ch4_training_curves_{dataset}.png`.
 
@@ -1420,7 +1424,7 @@ validacionom gubitku) na fiksnoj kombinaciji DeepInsight + ShallowCNN (mešanje
 piksela i raspored atributa), odnosno DeepInsight + pretrenirani ResNet-18
 (LP-FT). Napomena o ponovljivosti: ćelija „original“ ablacije reprodukuje
 odgovarajuću ćeliju glavne tabele u potpunosti na Breast Cancer, a unutar
-~0,2 pp na Dry Bean i Adult (zasebno pokretanje, CPU numerika) — brojevi
+~0,2 pp na Dry Bean i Adult (zasebno pokretanje, ne numerički identično) — brojevi
 ablacija se ne mešaju sa brojevima glavne tabele (6.1) u zaključcima.
 
 **Mešanje piksela (Slika 6.2, `ch4_ablation_pixel_shuffling.png`; tri serije: originalni raspored, krak A i krak B).**
@@ -1580,8 +1584,8 @@ poretka daju identične rezultate (96,45 / 93,37 / 66,53 %); ablacija rasporeda
 je za DeepInsight nerezultativna i stvarni efekat redosleda treba pokazati na
 naivnoj metodi (`--t2i naive`, §6.6). U glavnoj seriji napredne metode ne
 donose sistematsku prednost nad naivnom na ShallowCNN: rang zavisi od skupa
-(§6.1), a razlike među metodama (do ~3,7 pp na Dry Bean) manje su od efekta
-arhitekture (do ~3,7 pp na Dry Bean), dok je efekat pretreniranosti unutar ±1 pp (§6.7).
+(§6.1), a razlike među metodama (do 3,46 pp na Dry Bean, najvećim delom zbog IGTD-a)
+**veće** su od efekta izbora arhitekture (do 1,95 pp), dok je efekat pretreniranosti unutar ±1 pp (§6.7).
 
 **Transfer učenje na sintetičkim slikama.** Pretrenirani ResNet-18 ne donosi
 sistematsku prednost na T2I slikama: ΔF1 (pretrenirani minus od nule) ostaje u
@@ -1636,10 +1640,10 @@ zaključci odnose na taj protokol, u granicama ograničenja navedenih u §7.
 
 **Uticaj prostornog rasporeda.** Raspored atributa utiče na performanse, ali
 umereno i zavisno od skupa: raspon između najbolje i najlošije ćelije iznosi
-do ~3,7 pp (Dry Bean, najveći raspon u studiji), a na istoj arhitekturi do
-~3,3 pp; nijedna metoda ne dominira na sva tri skupa — IGTD je dosledno najslabiji na Dry Bean (traka bez prostorne
-grupisanosti: svi atributi u jednom redu, jedan piksel po atributu, bez kolizija — OF = OP = 0 %; §6.4), a TINTO i DeepInsight na Adult Income, gde 78,
-odnosno 70 od 104 one-hot atributa dele piksel (§6.4). Ablacija mešanja piksela pokazuje da model treniran na originalnom rasporedu
+do 3,66 pp između najbolje i najlošije ćelije (Dry Bean), a unutar iste
+arhitekture do 3,46 pp; nijedna metoda ne dominira na sva tri skupa — IGTD je dosledno najslabiji na Dry Bean (traka bez prostorne
+grupisanosti: svi atributi u jednom redu, jedan piksel po atributu, bez kolizija — OF = OP = 0 %; §6.4), a TINTO i DeepInsight na Adult Income, gde 86,
+odnosno 78 od 104 one-hot atributa dele piksel (§6.4). Ablacija mešanja piksela pokazuje da model treniran na originalnom rasporedu
 ne preživljava permutaciju ulaza — pad makro-F1 na Dry Bean za 85,21 pp, do
 nivoa većinske klase (tačnost 27,07 %, približno 26,1 %), na Adult Income za
 15,06 pp, na Breast Cancer za 6,58 pp. Da li raspored nosi informaciju (a ne
@@ -1670,9 +1674,9 @@ na ovim slikama **neutralna**, a linearna faza LP-FT-a čak i škodljiva.
 
 **Odnos sa baselajnima.** Na Breast Cancer i Dry Bean CNN+T2I dostižu nivo
 klasičnih metoda: najbolja ćelija (97,22 % F1 na Breast Cancer, 93,99 % na Dry
-Bean) paritetna je sa najboljim baselajnom (RF 96,55 %, odnosno XGBoost
-93,91 %). Na Adult Income XGBoost nadmašuje sve CNN+T2I kombinacije (71,43 %
-prema najboljih 68,98 %), a RF ima najvišu tačnost (85,52 %) — preslikavanje
+Bean) paritetna je sa najboljim baselajnom (XGBoost 95,83 %, odnosno 93,91 %).
+Na Adult Income XGBoost nadmašuje sve CNN+T2I kombinacije (71,43 %
+prema najboljih 68,98 %), a RF ima najvišu tačnost (84,27 %) — preslikavanje
 104 visokodimenzionalnih one-hot obeležja u 32×32 sliku gubitno je i u tom
 režimu T2I pristup ne dodaje vrednost u odnosu na tabularne modele. Baselajni su
 nepodešeni (uz balansirane težine klasa), pa se poređenje odnosi na zadati
@@ -1694,8 +1698,9 @@ Sveukupno, T2I pristup jeste održiv način primene konvolucionih mreža na
 tabelarne podatke: na skupovima sa umerenim brojem atributa dostiže paritet sa
 klasičnim algoritmima, uz dodatne mogućnosti interpretabilnosti (Grad-CAM,
 §6.4). Prostorni raspored utiče na to kako metoda radi, ali ga model ne mora
-uvažavati da bi postigao isti rezultat (krak B, §6.6); uticaj je
-njegov uticaj manji od izbora arhitekture i režima treninga, a prednosti
+uvažavati da bi postigao isti rezultat (krak B, §6.6); informacija koju nosi
+sam raspored je izmerljivo mala, pa je manja i od uticaja izbora arhitekture i od
+uticaja pretreniranosti, a prednosti
 transfer učenja sa prirodnih slika ne prenose se na sintetičke slike
 tabelarnog porekla. Uključivanje transformerskih arhitektura (ViT) u glavnu
 seriju ostaje otvoreno pitanje koje zahteva GPU resurse.
