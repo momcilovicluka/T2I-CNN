@@ -24,9 +24,51 @@ import argparse
 
 import json
 
+import os
+
 import sys
 
+import time
+
 from pathlib import Path
+
+
+
+def safe_savefig(fig, path, dpi=150, retries=8, delay=0.5):
+    """Save figure robustly on Windows (OneDrive/AV transient locks).
+
+    Writes to a unique temp file then atomically replaces the target,
+    retrying on OSError (e.g. Errno 22 from a locked destination).
+    """
+    path = Path(path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    last_err = None
+    for attempt in range(retries):
+        tmp = path.with_name(f"{path.stem}.tmp{os.getpid()}_{attempt}{path.suffix}")
+        try:
+            fig.savefig(tmp, dpi=dpi, bbox_inches='tight', facecolor='white')
+            try:
+                os.replace(tmp, path)
+            except OSError:
+                # Destination locked: remove it then retry the replace once
+                try:
+                    if path.exists():
+                        path.unlink()
+                except OSError:
+                    pass
+                os.replace(tmp, path)
+            return path
+        except OSError as e:
+            last_err = e
+            try:
+                if tmp.exists():
+                    tmp.unlink()
+            except OSError:
+                pass
+            time.sleep(delay)
+    # Final attempt: let any error propagate with context
+    fig.savefig(path, dpi=dpi, bbox_inches='tight', facecolor='white')
+    return path
 
 
 
@@ -483,7 +525,7 @@ def plot_main_results_heatmap(results, output_dir='results/figures'):
 
         path = output_path / f'ch4_heatmap_{dataset}.png'
 
-        fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+        safe_savefig(fig, path, dpi=150)
 
         plt.close(fig)
 
@@ -605,7 +647,7 @@ def plot_baseline_comparison(results, output_dir='results/figures'):
 
     path = output_path / 'ch4_baseline_comparison.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
@@ -741,7 +783,7 @@ def plot_per_class_f1(results, output_dir='results/figures'):
 
     path = output_path / 'ch4_per_class_f1_dry_bean.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
@@ -865,7 +907,7 @@ def plot_training_curves(results, output_dir='results/figures'):
 
         path = output_path / f'ch4_training_curves_{dataset}.png'
 
-        fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+        safe_savefig(fig, path, dpi=150)
 
         plt.close(fig)
 
@@ -981,7 +1023,7 @@ def plot_confusion_matrices(results, output_dir='results/figures'):
 
     path = output_path / 'ch4_confusion_matrices.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
@@ -1127,7 +1169,7 @@ def plot_ablation_results(output_dir='results/figures'):
 
         path = output_path / 'ch4_ablation_pixel_shuffling.png'
 
-        fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+        safe_savefig(fig, path, dpi=150)
 
         plt.close(fig)
 
@@ -1271,7 +1313,7 @@ def plot_ablation_results(output_dir='results/figures'):
 
         path = output_path / 'ch4_ablation_feature_ordering.png'
 
-        fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+        safe_savefig(fig, path, dpi=150)
 
         plt.close(fig)
 
@@ -1373,7 +1415,7 @@ def plot_ablation_results(output_dir='results/figures'):
 
         path = output_path / 'ch4_ablation_lpft.png'
 
-        fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+        safe_savefig(fig, path, dpi=150)
 
         plt.close(fig)
 
@@ -1521,7 +1563,7 @@ def plot_density_vs_performance(results, output_dir='results/figures'):
 
     path = output_path / 'ch4_density_vs_performance.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
@@ -1813,7 +1855,7 @@ def plot_gradcam_grid(results_dir='results', output_dir='results/figures', n_sam
 
         path = output_path / f'ch4_gradcam_{dataset}.png'
 
-        fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+        safe_savefig(fig, path, dpi=150)
 
         plt.close(fig)
 
@@ -1955,7 +1997,7 @@ def plot_class_distribution(output_dir='results/figures'):
 
     path = output_path / 'ch3_class_distribution.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
@@ -2117,7 +2159,7 @@ def plot_runtime_comparison(results, output_dir='results/figures'):
 
     path = output_path / 'ch4_runtime_comparison.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
@@ -2269,7 +2311,7 @@ def plot_roc_curves(results, output_dir='results/figures'):
 
     path = output_path / 'ch4_roc_curves.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
@@ -2481,7 +2523,7 @@ def plot_transfer_delta(results, output_dir='results/figures'):
 
     path = output_path / 'ch4_transfer_delta.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
@@ -2665,7 +2707,7 @@ def plot_overlap_diagnostics(output_dir='results/figures'):
 
     path = output_path / 'ch4_overlap_diagnostics.png'
 
-    fig.savefig(path, dpi=150, bbox_inches='tight', facecolor='white')
+    safe_savefig(fig, path, dpi=150)
 
     plt.close(fig)
 
