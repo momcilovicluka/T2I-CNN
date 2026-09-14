@@ -316,7 +316,7 @@ below are closed; the V-items are new findings from that validation pass.
 
 | V | Finding | Severity | Status |
 |---|---|---|---|
-| V1 | `adult_income/naive/resnet`: recorded single run (57.58 %, best checkpoint epoch 2/50) contradicts the five-seed repeat (68.36 ± 0.82 %). The −11.40 pp negative-transfer headline does not survive. | CRITICAL | C8 resolution above; draft + figures re-worded; targeted re-run outstanding |
+| V1 | `adult_income/naive/resnet`: recorded single run (57.58 %, best checkpoint epoch 2/50) contradicts the five-seed repeat (68.36 ± 0.82 %). The −11.40 pp negative-transfer headline does not survive. | CRITICAL | C8 resolution above; draft + figures re-worded; targeted re-run done (2026-09-14) — nine repeats of the identical configuration gave 57.58 % in 6 runs and 69.08 % in 3, so the cell is reported as a five-seed distribution, never as a single value; evidence kept in `results/backup_pre_rerun/` |
 | V2 | The C6 backfill was never applied: none of the 36 grid JSONs carry `f1_macro_all` / `balanced_accuracy`. | HIGH | Run `scripts/backfill_metrics.py --write`; guarded in `aggregate_results` |
 | V3 | `results/all_experiments.csv` contained only the 9 baseline rows (written while the grid JSONs were absent). | HIGH | Re-run `run_all.py --aggregate`; now refuses to write a CNN-less CSV |
 | V4 | `ch4_density_vs_performance.png` still carried the pre-C6 `Macro-F1 (%)` axis although the code writes `F1_LABEL[dataset]` (verified by reading the PNG). | MEDIUM | Regenerate (code already correct) |

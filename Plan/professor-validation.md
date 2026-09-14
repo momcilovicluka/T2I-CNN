@@ -696,5 +696,11 @@ an artefact of checkpoint selection rather than a property of the
 configuration. Quote paper numbers from `all_experiments.csv` + the 36 grid
 JSONs, and quote the claim-bearing cells from `results/stability_table.md`
 instead. Sections 12.2/12.3 are superseded by 12.3b/12.3c wherever they conflict.
-One re-run is outstanding: the flagged cell, three times at seed 42 with the
-split held at 42, so the artefact is recorded explicitly in the audit trail.
+The re-run is done (2026-09-14): the flagged cell was pushed nine times at seed 42
+with the split held at 42 and produced **two disjoint outcomes** — 57.58 % in six
+runs (best checkpoint epoch 2/50, 17 epochs) and 69.08 % in three (epoch 33/50, 48
+epochs), all at the same per-epoch speed. The cell is therefore numerically
+unstable at lr 1e-3, not merely mis-recorded once, and no single-run value for it
+may be quoted anywhere; use the five-seed distribution (68.36 ± 0.82 %) and the
+paired intervals in `results/stability_table.md`. Evidence is preserved in
+`results/backup_pre_rerun/`.
